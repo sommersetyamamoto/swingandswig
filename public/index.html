@@ -1,0 +1,654 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0d4a36">
+<title>Swing and Swig</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d4a36'/%3E%3Cpath d='M11 6v21' stroke='%23fff' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M12 6l12 4.5L12 15z' fill='%23f2c230'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;padding:0}
+img{max-width:100%}
+[hidden]{display:none!important}
+/* Layout: a manual tournament leaderboard — green header band, white board, hand-painted numbers; tabs for Board / Scorecard / Chair */
+:root{
+  --bg:#eef2ee; --board:#ffffff; --fg:#14231c; --muted:#5d6e65; --line:#d5ded8;
+  --green:#0d4a36; --green-ink:#ffffff; --flag:#f2c230; --flag-ink:#2b2100;
+  --plus:#1f7a4d; --minus:#b3372b; --chip:#e3ebe6;
+  --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#0b1511; --board:#13211b; --fg:#e7efe9; --muted:#9db0a5; --line:#24372e;
+  --green:#0f5a41; --green-ink:#ffffff; --flag:#f2c230; --flag-ink:#2b2100;
+  --plus:#5fd39a; --minus:#ff8a7d; --chip:#1c2e26; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0b1511; --board:#13211b; --fg:#e7efe9; --muted:#9db0a5; --line:#24372e;
+  --green:#0f5a41; --green-ink:#ffffff; --flag:#f2c230; --flag-ink:#2b2100;
+  --plus:#5fd39a; --minus:#ff8a7d; --chip:#1c2e26; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--green)}
+.wrap{max-width:880px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header{background:var(--green);color:var(--green-ink);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+header .wrap{padding-block:14px 0;display:flex;flex-direction:column;gap:10px}
+.brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--display);font-weight:800;font-size:34px;letter-spacing:.02em;text-transform:uppercase;margin:0;line-height:1}
+h1 span{color:var(--flag)}
+.meta{font-size:13px;opacity:.85}
+.live{display:inline-flex;align-items:center;gap:6px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:600}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--flag)}
+.live.off i{background:#9aa}
+nav{display:flex;gap:4px}
+nav button{font:600 15px var(--display);letter-spacing:.06em;text-transform:uppercase;background:none;border:0;color:var(--green-ink);opacity:.7;padding:10px 14px;border-bottom:3px solid transparent;cursor:pointer}
+nav button[aria-selected="true"]{opacity:1;border-color:var(--flag)}
+nav button:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+main .wrap{padding-block:20px 48px;display:flex;flex-direction:column;gap:20px}
+h2{font:700 20px var(--display);text-transform:uppercase;letter-spacing:.05em;margin:0}
+h3{font:700 16px var(--display);text-transform:uppercase;letter-spacing:.06em;margin:0;color:var(--muted)}
+.panel{background:var(--board);border:1px solid var(--line);border-radius:6px;padding:16px;display:flex;flex-direction:column;gap:14px}
+.note{color:var(--muted);font-size:14px;margin:0}
+.empty{padding:28px 16px;text-align:center;color:var(--muted)}
+.num{font-variant-numeric:tabular-nums}
+button.btn{font:600 14px var(--body);border-radius:4px;border:1px solid var(--line);background:var(--chip);color:var(--fg);padding:9px 14px;cursor:pointer}
+button.btn.primary{background:var(--green);border-color:var(--green);color:var(--green-ink)}
+button.btn.flag{background:var(--flag);border-color:var(--flag);color:var(--flag-ink)}
+button.btn.danger{color:var(--minus)}
+button.btn:disabled{opacity:.5;cursor:default}
+input,select{font:inherit;color:var(--fg);background:var(--board);border:1px solid var(--line);border-radius:4px;padding:8px 10px;min-width:0}
+label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted);flex:1 1 180px;min-width:0}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+
+/* Leaderboard */
+.board{background:var(--board);border:1px solid var(--line);border-radius:6px;overflow:hidden}
+.board table{width:100%;border-collapse:collapse}
+.board th{font:600 12px var(--display);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);text-align:right;padding:10px 12px;border-bottom:2px solid var(--line)}
+.board th.l,.board td.l{text-align:left}
+.board td{padding:12px;border-bottom:1px solid var(--line);text-align:right;font-variant-numeric:tabular-nums}
+.board tr.team{cursor:pointer}
+.board tr.team:hover td{background:color-mix(in srgb,var(--chip) 60%,transparent)}
+.pos{font:800 22px var(--display);width:48px;text-align:center!important}
+.tname{font:700 19px var(--display);letter-spacing:.02em;text-transform:uppercase}
+.players{font-size:12px;color:var(--muted)}
+.total{font:800 28px var(--display);color:var(--green)}
+:root[data-theme="dark"] .total{color:var(--flag)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .total{color:var(--flag)}}
+.adj.p{color:var(--plus);font-weight:600}.adj.m{color:var(--minus);font-weight:600}
+.lead .pos{color:var(--flag-ink);background:var(--flag)}
+.detail td{background:var(--bg);padding:10px 12px}
+.mini{overflow-x:auto}
+.mini table{border-collapse:collapse;font-size:13px;min-width:520px}
+.mini td,.mini th{border:1px solid var(--line);padding:4px 6px;text-align:center;font-variant-numeric:tabular-nums}
+.mini th{font:600 11px var(--display);letter-spacing:.06em;color:var(--muted)}
+@media (max-width:520px){.hide-sm{display:none}.board td,.board th{padding:10px 8px}.tname{font-size:17px}.total{font-size:24px}}
+
+.feed{display:flex;flex-direction:column}
+.ruling{display:grid;grid-template-columns:56px 1fr;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.ruling:last-child{border-bottom:0}
+.ruling .pts{font:800 22px var(--display);text-align:center;border-radius:4px;padding:2px 0;align-self:start}
+.ruling .pts.p{background:color-mix(in srgb,var(--plus) 15%,transparent);color:var(--plus)}
+.ruling .pts.m{background:color-mix(in srgb,var(--minus) 15%,transparent);color:var(--minus)}
+.ruling b{font-family:var(--display);text-transform:uppercase;letter-spacing:.03em;font-size:16px}
+.ruling div{min-width:0}
+.legend{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:12px;color:var(--muted)}
+
+/* Scorecard */
+.holehead{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.holehead .big{font:800 56px var(--display);line-height:.9}
+.holehead .big small{font-size:18px;font-weight:600;color:var(--muted);letter-spacing:.06em;margin-left:6px}
+.arrow{font:700 22px var(--display);width:48px;height:48px;border-radius:50%;border:1px solid var(--line);background:var(--chip);color:var(--fg);cursor:pointer}
+.pad{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.pad button{font:700 26px var(--display);padding:10px 4px 8px;border-radius:6px;border:1px solid var(--line);background:var(--board);color:var(--fg);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.pad button small{font:500 11px var(--body);color:var(--muted);letter-spacing:.02em}
+.pad button.sel{background:var(--green);border-color:var(--green);color:var(--green-ink)}
+.pad button.sel small{color:var(--green-ink);opacity:.85}
+.pad button:disabled{opacity:.45;cursor:default}
+.card{overflow-x:auto}
+.card table{border-collapse:collapse;width:100%;min-width:560px;font-variant-numeric:tabular-nums}
+.card th,.card td{border:1px solid var(--line);padding:6px 4px;text-align:center;font-size:14px}
+.card th{font:600 12px var(--display);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:var(--bg);text-align:left;padding-left:8px;width:64px}
+.card td.h{cursor:pointer}
+.card td.cur{outline:2px solid var(--flag);outline-offset:-2px}
+.card .sub{font-weight:700;background:var(--bg)}
+.card .ptsrow td{font-weight:700;color:var(--green)}
+:root[data-theme="dark"] .card .ptsrow td{color:var(--flag)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .card .ptsrow td{color:var(--flag)}}
+.sumline{display:flex;gap:18px;flex-wrap:wrap;font-size:14px;color:var(--muted)}
+.sumline b{font:800 22px var(--display);color:var(--fg);margin-right:4px}
+.status{font-size:13px;color:var(--muted);min-height:1.4em}
+.locked{background:var(--flag);color:var(--flag-ink);padding:8px 12px;border-radius:4px;font-weight:600;font-size:14px}
+
+/* Chair */
+.pars{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:4px}
+.pars label{display:flex;flex-direction:column;align-items:center;font-size:11px;color:var(--muted);gap:2px}
+.pars input{width:100%;text-align:center;padding:6px 2px}
+@media (max-width:520px){.pars{grid-template-columns:repeat(6,minmax(0,1fr))}}
+.teamrow{display:grid;grid-template-columns:1fr 1.4fr auto;gap:8px;align-items:center}
+@media (max-width:520px){.teamrow{grid-template-columns:1fr auto}.teamrow .pl{grid-column:1/-1;order:3}}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chips button{font:500 13px var(--body);border:1px solid var(--line);background:var(--chip);color:var(--fg);border-radius:999px;padding:5px 11px;cursor:pointer}
+.stepper{display:flex;align-items:center;gap:6px}
+.stepper button{width:40px;height:40px;font:700 20px var(--display);border-radius:4px;border:1px solid var(--line);background:var(--chip);color:var(--fg);cursor:pointer}
+.stepper output{font:800 28px var(--display);min-width:52px;text-align:center}
+.adjlist .item{display:grid;grid-template-columns:56px 1fr auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid var(--line)}
+.adjlist .item:last-child{border-bottom:0}
+.adjlist .acts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.tag{font-size:11px;text-transform:uppercase;letter-spacing:.08em;padding:2px 6px;border-radius:3px;background:var(--chip);color:var(--muted)}
+.tag.hid{background:var(--flag);color:var(--flag-ink)}
+.check{display:flex;align-items:center;gap:8px;font-size:14px}
+/* Chat */
+nav button .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:var(--flag);color:var(--flag-ink);font:700 12px var(--body);letter-spacing:0;line-height:18px;text-align:center}
+.chatlog{display:flex;flex-direction:column;gap:12px;max-height:60vh;overflow-y:auto;padding-right:4px}
+.msg{display:flex;flex-direction:column;gap:4px;max-width:88%;align-self:flex-start;min-width:0}
+.msg.mine{align-self:flex-end;align-items:flex-end}
+.msg .who{font-size:12px;color:var(--muted)}
+.msg .who b{font-family:var(--display);font-size:14px;letter-spacing:.03em;text-transform:uppercase;color:var(--fg)}
+.bubble{background:var(--chip);border-radius:10px 10px 10px 2px;padding:8px 12px;overflow-wrap:anywhere;white-space:pre-wrap}
+.msg.mine .bubble{background:var(--green);color:var(--green-ink);border-radius:10px 10px 2px 10px}
+.reacts{display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.reacts button{font:500 13px var(--body);border:1px solid var(--line);background:var(--board);color:var(--fg);border-radius:999px;padding:2px 8px;cursor:pointer;line-height:1.5}
+.reacts button.on{border-color:var(--green);background:color-mix(in srgb,var(--green) 14%,var(--board))}
+.reacts .add{color:var(--muted)}
+.reacts .del{color:var(--minus);border-color:transparent;background:none}
+.picker{display:flex;gap:4px;flex-wrap:wrap}
+.composer{display:flex;gap:8px}
+.composer input{flex:1}
+@media (prefers-reduced-motion:no-preference){.flash{animation:fl 1.2s ease-out}@keyframes fl{from{background:color-mix(in srgb,var(--flag) 40%,transparent)}to{background:transparent}}}
+.namerow{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted);flex-wrap:wrap}
+.linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--plus);text-decoration:underline;cursor:pointer}
+footer{padding:0 0 32px;font-size:13px;color:var(--muted);text-align:center}
+footer a{color:inherit}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <div class="brand">
+      <div>
+        <h1 id="evName">Swing <span>&amp;</span> Swig</h1>
+        <div class="meta" id="evMeta">Stableford scramble</div>
+      </div>
+      <div class="live off" id="live"><i></i><span>Connecting</span></div>
+    </div>
+    <nav role="tablist">
+      <button role="tab" id="tab-board" data-view="board" aria-selected="true">Leaderboard</button>
+      <button role="tab" id="tab-card" data-view="card" aria-selected="false">Scorecard</button>
+      <button role="tab" id="tab-chat" data-view="chat" aria-selected="false">Chat<span class="badge" id="chatBadge" hidden></span></button>
+      <button role="tab" id="tab-chair" data-view="chair" aria-selected="false" hidden>Chair</button>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <!-- LEADERBOARD -->
+  <section class="wrap" id="view-board">
+    <div id="offline" class="panel" hidden><p class="note">Can't reach the scoreboard right now. It will reconnect on its own.</p></div>
+    <div class="board" id="boardWrap">
+      <table>
+        <thead><tr><th class="pos">Pos</th><th class="l">Team</th><th>Thru</th><th class="hide-sm">Pts</th><th>Adj</th><th>Total</th></tr></thead>
+        <tbody id="boardBody"><tr><td colspan="6" class="empty">Loading the board…</td></tr></tbody>
+      </table>
+    </div>
+    <div class="legend"><span>Bogey 1 · Par 2 · Birdie 3 · Eagle 4 · Albatross 5 · Double bogey or worse 0</span><span>Tap a team for its card.</span></div>
+    <div class="panel">
+      <h2>Chair's rulings</h2>
+      <div class="feed" id="feed"><p class="note">No rulings yet. The tournament chair may add or deduct points at any time, for any reason.</p></div>
+    </div>
+  </section>
+
+  <!-- SCORECARD -->
+  <section class="wrap" id="view-card" hidden>
+    <div class="panel">
+      <div class="row">
+        <label class="f">Your team<select id="teamSel"></select></label>
+      </div>
+      <div id="lockMsg" class="locked" hidden>Scorecards are locked. Only the tournament chair can change scores now.</div>
+      <div class="holehead">
+        <button class="arrow" id="prevH" aria-label="Previous hole">‹</button>
+        <div style="text-align:center">
+          <div class="big num" id="hNum">1<small id="hPar">PAR 4</small></div>
+          <div class="status" id="hPts">No score yet</div>
+        </div>
+        <button class="arrow" id="nextH" aria-label="Next hole">›</button>
+      </div>
+      <div class="pad" id="pad"></div>
+      <div class="status" id="saveStatus"></div>
+    </div>
+    <div class="panel">
+      <div class="sumline" id="sumline"></div>
+      <div class="card" id="cardTable"></div>
+      <p class="note">Tap any hole on the card to change it. Scores save automatically and show on the leaderboard within seconds.</p>
+    </div>
+  </section>
+
+  <!-- CHAT -->
+  <section class="wrap" id="view-chat" hidden>
+    <div class="panel">
+      <h2>Clubhouse chat</h2>
+      <div class="chatlog" id="chatLog"><p class="note">No messages yet. Post the first one below.</p></div>
+      <div class="namerow" id="nameShow" hidden>Posting as <b id="nameVal"></b><button type="button" class="linkbtn" id="nameEdit">Change</button></div>
+      <label class="f" id="nameAsk">Your name<input id="chatName" maxlength="30" autocomplete="nickname" placeholder="So everyone knows who's talking"></label>
+      <form class="composer" id="chatForm">
+        <input id="chatInput" maxlength="280" autocomplete="off" placeholder="Talk some friendly trash…" aria-label="Message">
+        <button class="btn primary" id="chatSend" type="submit">Send</button>
+      </form>
+      <div class="status" id="chatStatus"></div>
+    </div>
+  </section>
+
+  <!-- CHAIR -->
+  <section class="wrap" id="view-chair" hidden>
+    <div class="panel" id="chairLogin">
+      <h2>Chair sign-in</h2>
+      <p class="note">Enter the chair PIN to add rulings, lock scorecards, and set up the event.</p>
+      <form class="row" id="pinForm">
+        <label class="f">PIN<input id="pinInput" type="password" autocomplete="current-password" inputmode="numeric"></label>
+        <button class="btn primary" type="submit">Sign in</button>
+      </form>
+      <div class="status" id="pinStatus"></div>
+    </div>
+
+    <div id="chairTools" hidden style="display:flex;flex-direction:column;gap:20px">
+    <div class="panel">
+      <h2>Rulings</h2>
+      <p class="note">Award or deduct points from any team. Hidden rulings don't count, and players can't see them, until you reveal them. Good for a post-round announcement.</p>
+      <div class="row">
+        <label class="f">Team<select id="adjTeam"></select></label>
+        <div class="stepper"><button id="adjMinus" aria-label="Fewer points">−</button><output id="adjPts" class="num">+1</output><button id="adjPlus" aria-label="More points">+</button></div>
+      </div>
+      <label class="f">Reason<input id="adjReason" maxlength="120" placeholder="Bought the chair a mai tai"></label>
+      <div class="chips" id="reasonChips"></div>
+      <div class="row" style="justify-content:space-between">
+        <label class="check"><input type="checkbox" id="adjHidden"> Hide until I reveal it</label>
+        <div class="row">
+          <button class="btn flag" id="wildcard">Roll a wildcard</button>
+          <button class="btn primary" id="adjAdd">Add ruling</button>
+        </div>
+      </div>
+      <div class="status" id="adjStatus"></div>
+      <div class="adjlist" id="adjList"></div>
+    </div>
+
+    <div class="panel">
+      <h2>Round control</h2>
+      <label class="check"><input type="checkbox" id="lockChk"> Lock scorecards (teams can no longer change scores)</label>
+      <p class="note">You can still edit any team's card from the Scorecard tab while locked.</p>
+    </div>
+
+    <div class="panel">
+      <h2>Event setup</h2>
+      <div class="row">
+        <label class="f">Tournament name<input id="cfName"></label>
+        <label class="f">Course<input id="cfCourse" placeholder="Course name"></label>
+        <label class="f">Date<input id="cfDate" type="date"></label>
+        <label class="f" style="flex:0 1 120px">Holes<select id="cfHoles"><option value="18">18</option><option value="9">9</option></select></label>
+      </div>
+      <h3>Par by hole</h3>
+      <div class="pars" id="parGrid"></div>
+      <div class="note num" id="parTotal"></div>
+      <h3>Teams</h3>
+      <div id="teamList" style="display:flex;flex-direction:column;gap:8px"></div>
+      <div class="row"><button class="btn" id="addTeam">Add team</button></div>
+      <div class="row" style="justify-content:flex-end"><span class="status" id="cfStatus"></span><button class="btn primary" id="cfSave">Save setup</button></div>
+    </div>
+
+    <div class="row" style="justify-content:flex-end"><button class="btn" id="chairOut">Sign out of chair</button></div>
+    </div>
+  </section>
+</main>
+<footer class="wrap"><a href="#chair" id="chairLink">Tournament chair? Sign in</a></footer>
+
+<script>
+(function(){
+const DEFAULT_PARS=[4,4,3,5,4,4,3,4,5,4,4,3,5,4,4,3,4,5];
+const REASONS=["Bought the chair a mai tai","Best dressed foursome","Slow play penalty","Excessive celebration","Lost ball, found friendship","Beverage cart MVPs","Mulligan tax","Sand trap souvenir","Chair's mood swing","Too much talking in the backswing","Spotted helping another team","Shotgun start, shotgun finish"];
+const POLL_MS=5000;
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const ls={get(k){try{return localStorage.getItem(k)}catch(_){return null}},set(k,v){try{v==null?localStorage.removeItem(k):localStorage.setItem(k,v)}catch(_){}}};
+const st={config:null,scores:{},adjust:[],isChair:false,ready:false,team:ls.get("ss-team"),hole:0,openRow:null,adjPts:1,confirmDel:null,draft:null,view:"board"};
+
+/* ---------- API ---------- */
+const rid=()=>(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2)+Date.now().toString(36)).replace(/-/g,"");
+const API={
+  key:ls.get("ss-key")||(()=>{const k=rid()+rid();ls.set("ss-key",k);return k})(),
+  pin:ls.get("ss-pin")||"",
+  async call(method,path,body){
+    const h={"x-client-key":API.key};if(API.pin)h["x-chair-pin"]=API.pin;if(body!==undefined)h["content-type"]="application/json";
+    const r=await fetch("/api/"+path,{method,headers:h,body:body===undefined?undefined:JSON.stringify(body),cache:"no-store"});
+    let d=null;try{d=await r.json()}catch(_){}
+    if(!r.ok){const e=new Error((d&&d.error)||("HTTP "+r.status));e.code=d&&d.code;e.status=r.status;throw e}
+    return d;
+  }
+};
+
+function cfg(){return st.config||{name:"Swing and Swig",course:"",date:"",pars:DEFAULT_PARS.slice(),teams:[],locked:false}}
+function pars(){const c=cfg();return (c.pars||DEFAULT_PARS).slice(0,c.holes||c.pars?.length||18)}
+function pts(strokes,par){if(strokes==null)return null;if(strokes==="P")return 0;return Math.max(0,2+par-strokes)}
+function label(strokes,par){if(strokes==="P")return"Picked up";const d=strokes-par;return({"-3":"Albatross","-2":"Eagle","-1":"Birdie","0":"Par","1":"Bogey","2":"Double bogey"})[d]??(d<-3?"Condor":`+${d}`)}
+function teamHoles(id){return (st.scores[id]&&st.scores[id].holes)||{}}
+function teamCalc(id){
+  const h=teamHoles(id),p=pars();let base=0,thru=0;
+  p.forEach((par,i)=>{const s=h[i+1];if(s!=null){thru++;base+=pts(s,par)}});
+  const adj=st.adjust.filter(a=>a.teamId===id&&!a.hidden).reduce((t,a)=>t+(+a.points||0),0);
+  return{base,thru,adj,total:base+adj};
+}
+
+/* ---------- tabs ---------- */
+function show(v){
+  st.view=v;
+  if(v==="chair")$("tab-chair").hidden=false;
+  ["board","card","chat","chair"].forEach(n=>{$("view-"+n).hidden=n!==v;$("tab-"+n).setAttribute("aria-selected",n===v)});
+  if(v==="card")renderCard();
+  if(v==="chat"){chat.unread=0;$("chatBadge").hidden=true;renderChat(true)}
+  if(v==="chair")renderChairGate();
+  if(location.hash.slice(1)!==v)history.replaceState(null,"","#"+v);
+}
+document.querySelectorAll("nav button").forEach(b=>b.onclick=()=>show(b.dataset.view));
+window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(["board","card","chat","chair"].includes(h)&&h!==st.view)show(h)});
+
+/* ---------- chat ---------- */
+const REACTS=[["up","👍"],["lol","😂"],["fire","🔥"],["flag","⛳"],["beer","🍺"],["clap","👏"]];
+const chat={msgs:[],me:null,unread:0,seen:null,picker:null,confirmDel:null,name:ls.get("ss-name")||""};
+function renderName(){
+  const has=!!chat.name;$("nameAsk").hidden=has;$("nameShow").hidden=!has;$("nameVal").textContent=chat.name;
+  if(!has)$("chatName").value="";
+}
+$("nameEdit").onclick=()=>{$("chatName").value=chat.name;$("nameAsk").hidden=false;$("nameShow").hidden=true;$("chatName").focus()};
+function renderChat(scroll){
+  const log=$("chatLog");
+  const atBottom=log.scrollHeight-log.scrollTop-log.clientHeight<60;
+  const teams=Object.fromEntries((cfg().teams||[]).map(t=>[t.id,t.name]));
+  if(!chat.msgs.length){log.innerHTML=`<p class="note">No messages yet. Post the first one below.</p>`;return}
+  log.innerHTML=chat.msgs.map(m=>{
+    const mine=m.uid&&m.uid===chat.me,r=m.reactions||{};
+    const who=mine?"You":(m.name||"A golfer");
+    const time=m.at?new Date(m.at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"";
+    const chips=REACTS.map(([k,e])=>{const set=r[k]||{},n=Object.values(set).filter(Boolean).length;if(!n)return"";
+      return `<button data-r="${k}" data-id="${esc(m.id)}" class="${set[chat.me]?"on":""}" aria-label="${e} ${n}">${e} ${n}</button>`}).join("");
+    const picker=chat.picker===m.id?`<span class="picker">${REACTS.map(([k,e])=>`<button data-r="${k}" data-id="${esc(m.id)}" aria-label="React ${e}">${e}</button>`).join("")}</span>`:"";
+    const canDel=mine||st.isChair;
+    return `<div class="msg${mine?" mine":""}"><div class="who"><b>${esc(who)}</b>${m.teamId&&teams[m.teamId]?" · "+esc(teams[m.teamId]):""} · ${time}</div>
+      <div class="bubble">${esc(m.text)}</div>
+      <div class="reacts">${chips}<button class="add" data-pick="${esc(m.id)}" aria-label="Add reaction">${chat.picker===m.id?"×":"☺ +"}</button>${picker}${canDel?`<button class="del" data-del="${esc(m.id)}">${chat.confirmDel===m.id?"Confirm delete":"Delete"}</button>`:""}</div></div>`;
+  }).join("");
+  log.querySelectorAll("[data-r]").forEach(b=>b.onclick=()=>react(b.dataset.id,b.dataset.r));
+  log.querySelectorAll("[data-pick]").forEach(b=>b.onclick=()=>{chat.picker=chat.picker===b.dataset.pick?null:b.dataset.pick;renderChat()});
+  log.querySelectorAll("[data-del]").forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.del;
+    if(chat.confirmDel!==id){chat.confirmDel=id;renderChat();return}
+    chat.confirmDel=null;b.disabled=true;
+    try{await API.call("DELETE","chat/"+encodeURIComponent(id));chat.msgs=chat.msgs.filter(m=>m.id!==id);renderChat()}catch(_){$("chatStatus").textContent="Couldn't delete that message."}
+    refresh();
+  });
+  if(scroll||atBottom)log.scrollTop=log.scrollHeight;
+}
+const reactQ={};
+function react(id,k){
+  if(!chat.me)return;
+  const m=chat.msgs.find(x=>x.id===id);if(!m)return;
+  const on=!(m.reactions&&m.reactions[k]&&m.reactions[k][chat.me]);
+  chat.picker=null;
+  const set={...((m.reactions||{})[k]||{})};if(on)set[chat.me]=true;else delete set[chat.me];
+  m.reactions={...(m.reactions||{}),[k]:set};
+  renderChat();
+  begin();
+  reactQ[id]=(reactQ[id]||Promise.resolve()).then(()=>API.call("POST",`chat/${encodeURIComponent(id)}/react`,{k,on}))
+    .catch(()=>{$("chatStatus").textContent="Couldn't save that reaction."}).finally(end);
+}
+$("chatForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const text=$("chatInput").value.trim();if(!text)return;
+  const nm=($("nameAsk").hidden?chat.name:$("chatName").value.trim()).slice(0,30);
+  if(!nm){$("chatStatus").textContent="Add your name first.";$("chatName").focus();return}
+  if(nm!==chat.name){chat.name=nm;ls.set("ss-name",nm);renderName()}
+  $("chatSend").disabled=true;
+  try{const d=await API.call("POST","chat",{name:nm,teamId:st.team||"",text});$("chatInput").value="";$("chatStatus").textContent="";chat.msgs.push(d.msg);chat.seen&&chat.seen.add(d.msg.id);renderChat(true)}
+  catch(err){$("chatStatus").textContent=err.status===400?err.message:"Message didn't send. Check your signal and try again."}
+  $("chatSend").disabled=false;$("chatInput").focus();refresh();
+});
+
+/* ---------- header ---------- */
+function renderHeader(){
+  const c=cfg();
+  const nm=(c.name||"Swing and Swig");
+  document.title=nm;
+  $("evName").innerHTML=esc(nm).replace(/ (and|&amp;) /i," <span>&amp;</span> ");
+  const p=pars(),tot=p.reduce((a,b)=>a+b,0);
+  const bits=[c.course,c.date&&new Date(c.date+"T12:00").toLocaleDateString(undefined,{weekday:"short",month:"short",day:"numeric"}),`${p.length} holes · Par ${tot}`,"Stableford scramble"].filter(Boolean);
+  $("evMeta").textContent=bits.join(" · ");
+}
+
+/* ---------- leaderboard ---------- */
+function renderBoard(){
+  const teams=cfg().teams||[],body=$("boardBody");
+  if(!st.ready&&!st.config){return}
+  if(!teams.length){body.innerHTML=`<tr><td colspan="6" class="empty">No teams yet. The tournament chair adds teams in the Chair tab, then they appear here.</td></tr>`;return}
+  const rows=teams.map(t=>({t,...teamCalc(t.id)})).sort((a,b)=>b.total-a.total||b.base-a.base||a.t.name.localeCompare(b.t.name));
+  const n=pars().length;
+  let html="",prev=null,pos=0;
+  rows.forEach((r,i)=>{
+    if(r.total!==prev){pos=i+1;prev=r.total}
+    const tie=rows.filter(x=>x.total===r.total).length>1;
+    const adjCls=r.adj>0?"p":r.adj<0?"m":"";
+    html+=`<tr class="team ${pos===1&&r.thru+r.adj!==0?"lead":""}" data-id="${esc(r.t.id)}" tabindex="0">
+      <td class="pos">${tie?"T":""}${pos}</td>
+      <td class="l"><div class="tname">${esc(r.t.name)}</div>${r.t.players?`<div class="players">${esc(r.t.players)}</div>`:""}</td>
+      <td>${r.thru===0?"–":r.thru===n?"F":r.thru}</td>
+      <td class="hide-sm">${r.base}</td>
+      <td class="adj ${adjCls}">${r.adj>0?"+"+r.adj:r.adj||"–"}</td>
+      <td class="total">${r.total}</td></tr>`;
+    if(st.openRow===r.t.id)html+=`<tr class="detail"><td colspan="6">${miniCard(r.t.id)}</td></tr>`;
+  });
+  body.innerHTML=html;
+  body.querySelectorAll("tr.team").forEach(tr=>{const go=()=>{st.openRow=st.openRow===tr.dataset.id?null:tr.dataset.id;renderBoard()};tr.onclick=go;tr.onkeydown=e=>{if(e.key==="Enter")go()}});
+}
+function miniCard(id){
+  const p=pars(),h=teamHoles(id);
+  let a="<tr><th>Hole</th>",b="<tr><th>Par</th>",c="<tr><th>Score</th>",d="<tr><th>Pts</th>";
+  p.forEach((par,i)=>{const s=h[i+1];a+=`<th>${i+1}</th>`;b+=`<td>${par}</td>`;c+=`<td>${s==null?"":s==="P"?"X":s}</td>`;d+=`<td>${s==null?"":pts(s,par)}</td>`});
+  return `<div class="mini"><table>${a}</tr>${b}</tr>${c}</tr>${d}</tr></table></div>`;
+}
+function renderFeed(){
+  const teams=Object.fromEntries((cfg().teams||[]).map(t=>[t.id,t.name]));
+  const list=st.adjust.filter(a=>!a.hidden).sort((x,y)=>(y.at||0)-(x.at||0));
+  if(!list.length){$("feed").innerHTML=`<p class="note">No rulings yet. The tournament chair may add or deduct points at any time, for any reason.</p>`;return}
+  $("feed").innerHTML=list.map(a=>{const p=+a.points;return `<div class="ruling"><span class="pts ${p>=0?"p":"m"}">${p>0?"+":""}${p}</span><div><b>${esc(teams[a.teamId]||"Former team")}</b><div>${esc(a.reason||"No reason given. The chair's decision is final.")}</div><div class="players">${a.at?new Date(a.at).toLocaleTimeString([], {hour:"numeric",minute:"2-digit"}):""}</div></div></div>`}).join("");
+}
+
+/* ---------- scorecard ---------- */
+function renderTeamSel(){
+  const teams=cfg().teams||[];
+  if(!teams.find(t=>t.id===st.team))st.team=teams[0]?.id||null;
+  const opts=teams.length?teams.map(t=>`<option value="${esc(t.id)}"${t.id===st.team?" selected":""}>${esc(t.name)}</option>`).join(""):`<option value="">No teams set up yet</option>`;
+  const keep=$("adjTeam").value;
+  $("teamSel").innerHTML=opts;$("adjTeam").innerHTML=opts;
+  if(keep&&teams.find(t=>t.id===keep))$("adjTeam").value=keep;
+}
+$("teamSel").onchange=e=>{st.team=e.target.value;ls.set("ss-team",st.team);st.hole=firstOpen();renderCard()};
+function firstOpen(){const h=teamHoles(st.team),n=pars().length;for(let i=0;i<n;i++)if(h[i+1]==null)return i;return 0}
+function editable(){return st.ready&&!!st.team&&(!cfg().locked||st.isChair)}
+function renderCard(){
+  const p=pars();if(st.hole>=p.length)st.hole=0;
+  const par=p[st.hole],h=teamHoles(st.team),cur=h[st.hole+1];
+  $("hNum").innerHTML=`${st.hole+1}<small>PAR ${par}</small>`;
+  $("hPts").textContent=cur==null?"No score yet":`${cur==="P"?"Picked up":cur+" · "+label(cur,par)} · ${pts(cur,par)} pt${pts(cur,par)===1?"":"s"}`;
+  $("lockMsg").hidden=!(cfg().locked&&!st.isChair);
+  const can=editable();
+  let pad="";for(let s=1;s<=10;s++){const pp=pts(s,par);pad+=`<button data-s="${s}" class="${cur===s?"sel":""}"${can?"":" disabled"}>${s}<small>${s-par>=3?"0 pts":label(s,par)+" · "+pp}</small></button>`}
+  pad+=`<button data-s="P" class="${cur==="P"?"sel":""}"${can?"":" disabled"}>X<small>Pick up · 0</small></button>`;
+  pad+=`<button data-s="" ${can&&cur!=null?"":"disabled"}>⌫<small>Clear</small></button>`;
+  $("pad").innerHTML=pad;
+  $("pad").querySelectorAll("button").forEach(b=>b.onclick=()=>enter(b.dataset.s));
+  const half=p.length>9?[[0,9],[9,18]]:[[0,p.length]];
+  let html="";const c=teamCalc(st.team);
+  half.forEach(([a,z],k)=>{
+    let r1="<tr><th>Hole</th>",r2="<tr><th>Par</th>",r3="<tr><th>Score</th>",r4='<tr class="ptsrow"><th>Pts</th>';let sp=0,sP=0;
+    for(let i=a;i<z;i++){const s=h[i+1],q=pts(s,p[i]);sp+=p[i];sP+=q||0;const cls=`h${i===st.hole?" cur":""}`;
+      r1+=`<td class="${cls}" data-i="${i}"><b>${i+1}</b></td>`;r2+=`<td>${p[i]}</td>`;r3+=`<td class="${cls}" data-i="${i}">${s==null?"":s==="P"?"X":s}</td>`;r4+=`<td class="${cls}" data-i="${i}">${s==null?"":q}</td>`}
+    const lab=p.length>9?(k?"In":"Out"):"Tot";
+    r1+=`<td class="sub">${lab}</td>`;r2+=`<td class="sub">${sp}</td>`;r3+=`<td class="sub"></td>`;r4+=`<td class="sub">${sP}</td>`;
+    html+=`<table style="margin-bottom:8px">${r1}</tr>${r2}</tr>${r3}</tr>${r4}</tr></table>`;
+  });
+  $("cardTable").innerHTML=st.team?html:`<p class="note">Pick your team above to start scoring.</p>`;
+  $("cardTable").querySelectorAll("td[data-i]").forEach(td=>td.onclick=()=>{st.hole=+td.dataset.i;renderCard();window.scrollTo({top:0,behavior:"smooth"})});
+  $("sumline").innerHTML=st.team?`<span><b class="num">${c.base}</b>points</span><span><b class="num">${c.adj>0?"+"+c.adj:c.adj}</b>rulings</span><span><b class="num">${c.total}</b>total</span><span><b class="num">${c.thru}</b>of ${p.length} holes</span>`:"";
+}
+$("prevH").onclick=()=>{const n=pars().length;st.hole=(st.hole-1+n)%n;renderCard()};
+$("nextH").onclick=()=>{const n=pars().length;st.hole=(st.hole+1)%n;renderCard()};
+
+const queue={};
+function enter(raw){
+  if(!editable())return;
+  const val=raw===""?null:raw==="P"?"P":+raw,team=st.team,hole=st.hole+1;
+  const holes={...teamHoles(team)};if(val==null)delete holes[hole];else holes[hole]=val;
+  st.scores={...st.scores,[team]:{...(st.scores[team]||{}),holes}};
+  if(val!=null&&st.hole<pars().length-1)st.hole++;
+  renderCard();renderBoard();
+  $("saveStatus").textContent="Saving…";
+  begin();
+  queue[team]=(queue[team]||Promise.resolve()).then(()=>API.call("POST","score",{team,hole,val}))
+    .then(()=>{$("saveStatus").textContent=`Saved hole ${hole}.`})
+    .catch(e=>{$("saveStatus").textContent=e.code==="locked"?"Scorecards are locked. That score didn't save.":"Couldn't save that score. Check your signal and tap it again."})
+    .finally(end);
+}
+
+/* ---------- chair: sign-in ---------- */
+function renderChairGate(){$("chairLogin").hidden=st.isChair;$("chairTools").hidden=!st.isChair;$("chairLink").hidden=st.isChair}
+$("chairLink").onclick=e=>{e.preventDefault();show("chair");window.scrollTo({top:0});$("pinInput").focus()};
+$("pinForm").addEventListener("submit",async e=>{
+  e.preventDefault();
+  const pin=$("pinInput").value.trim();if(!pin)return;
+  $("pinStatus").textContent="Checking…";
+  const old=API.pin;API.pin=pin;
+  try{await API.call("POST","chair/check",{});ls.set("ss-pin",pin);$("pinInput").value="";$("pinStatus").textContent="";st.isChair=true;loadDraft();$("tab-chair").hidden=false;renderChairGate();lastRaw="";refresh()}
+  catch(err){API.pin=old;$("pinStatus").textContent=err.status===403||err.status===503?err.message:"Couldn't check the PIN. Try again."}
+});
+$("chairOut").onclick=()=>{API.pin="";ls.set("ss-pin",null);st.isChair=false;$("tab-chair").hidden=true;lastRaw="";show("board");renderChairGate();refresh()};
+
+/* ---------- chair: rulings ---------- */
+$("reasonChips").innerHTML=REASONS.map(r=>`<button type="button">${esc(r)}</button>`).join("");
+$("reasonChips").querySelectorAll("button").forEach(b=>b.onclick=()=>{$("adjReason").value=b.textContent});
+function setAdjPts(v){st.adjPts=Math.max(-10,Math.min(10,v))||0;$("adjPts").textContent=(st.adjPts>0?"+":"")+st.adjPts}
+$("adjMinus").onclick=()=>setAdjPts(st.adjPts-1);$("adjPlus").onclick=()=>setAdjPts(st.adjPts+1);
+$("wildcard").onclick=()=>{
+  const teams=cfg().teams||[];if(!teams.length)return;
+  const t=teams[Math.floor(Math.random()*teams.length)];$("adjTeam").value=t.id;
+  let v=0;while(v===0)v=Math.floor(Math.random()*7)-3;setAdjPts(v);
+  $("adjReason").value=REASONS[Math.floor(Math.random()*REASONS.length)];
+  $("adjStatus").textContent="Wildcard rolled. Edit it if you like, then add the ruling.";
+};
+$("adjAdd").onclick=async()=>{
+  const teamId=$("adjTeam").value;if(!teamId||!st.adjPts){$("adjStatus").textContent="Pick a team and a non-zero number of points.";return}
+  const doc={teamId,points:st.adjPts,reason:$("adjReason").value.trim(),hidden:$("adjHidden").checked};
+  $("adjAdd").disabled=true;
+  try{await API.call("POST","adjust",doc);$("adjReason").value="";$("adjStatus").textContent=doc.hidden?"Hidden ruling saved. Reveal it when you're ready.":"Ruling posted to the leaderboard.";await refresh()}
+  catch(e){$("adjStatus").textContent=e.status===403?"Your chair sign-in has expired. Sign in again.":"Couldn't save the ruling. Try again in a moment."}
+  $("adjAdd").disabled=false;
+};
+function renderAdjList(){
+  const teams=Object.fromEntries((cfg().teams||[]).map(t=>[t.id,t.name]));
+  const list=st.adjust.slice().sort((x,y)=>(y.at||0)-(x.at||0));
+  $("adjList").innerHTML=list.length?list.map(a=>{const p=+a.points;return `<div class="item"><span class="ruling"><span class="pts ${p>=0?"p":"m"}" style="display:block">${p>0?"+":""}${p}</span></span>
+    <div style="min-width:0"><b>${esc(teams[a.teamId]||"Former team")}</b> ${a.hidden?'<span class="tag hid">Hidden</span>':'<span class="tag">Live</span>'}<div class="players">${esc(a.reason||"No reason given")}</div></div>
+    <div class="acts"><button class="btn" data-act="toggle" data-id="${esc(a.id)}">${a.hidden?"Reveal":"Hide"}</button>
+    <button class="btn danger" data-act="del" data-id="${esc(a.id)}">${st.confirmDel===a.id?"Confirm remove":"Remove"}</button></div></div>`}).join(""):`<p class="note">No rulings yet.</p>`;
+  $("adjList").querySelectorAll("button").forEach(b=>b.onclick=async()=>{
+    const id=b.dataset.id,a=st.adjust.find(x=>x.id===id);if(!a)return;
+    if(b.dataset.act==="del"&&st.confirmDel!==id){st.confirmDel=id;renderAdjList();return}
+    b.disabled=true;
+    try{
+      if(b.dataset.act==="toggle")await API.call("PATCH","adjust/"+encodeURIComponent(id),{hidden:!a.hidden});
+      else{st.confirmDel=null;await API.call("DELETE","adjust/"+encodeURIComponent(id))}
+      await refresh();
+    }catch(e){$("adjStatus").textContent="That change didn't save. Try again."}
+    b.disabled=false;
+  });
+}
+$("lockChk").onchange=async e=>{
+  try{await API.call("PATCH","config",{locked:e.target.checked});await refresh()}catch(_){e.target.checked=!e.target.checked;$("cfStatus").textContent="Couldn't change the lock."}
+};
+
+/* ---------- chair: setup ---------- */
+function loadDraft(){const c=cfg();st.draft={name:c.name||"Swing and Swig",course:c.course||"",date:c.date||"",holes:c.holes||18,pars:(c.pars||DEFAULT_PARS).concat(DEFAULT_PARS.slice((c.pars||DEFAULT_PARS).length)).slice(0,18),teams:(c.teams||[]).map(t=>({...t}))};renderSetup()}
+function renderSetup(){
+  const d=st.draft;$("cfName").value=d.name;$("cfCourse").value=d.course;$("cfDate").value=d.date;$("cfHoles").value=String(d.holes);
+  let g="";for(let i=0;i<d.holes;i++)g+=`<label>${i+1}<input type="number" min="3" max="6" id="par${i}" value="${d.pars[i]}" inputmode="numeric"></label>`;
+  $("parGrid").innerHTML=g;
+  $("parGrid").querySelectorAll("input").forEach((inp,i)=>inp.oninput=()=>{d.pars[i]=Math.max(3,Math.min(6,+inp.value||4));parTot()});
+  parTot();
+  $("teamList").innerHTML=d.teams.length?d.teams.map((t,i)=>`<div class="teamrow"><input id="tn${i}" value="${esc(t.name)}" placeholder="Team name" aria-label="Team name"><input class="pl" id="tp${i}" value="${esc(t.players||"")}" placeholder="Players (optional)" aria-label="Players"><button class="btn danger" data-i="${i}">Remove</button></div>`).join(""):`<p class="note">No teams yet. Add one for each group on the course.</p>`;
+  d.teams.forEach((t,i)=>{$("tn"+i).oninput=e=>t.name=e.target.value;$("tp"+i).oninput=e=>t.players=e.target.value});
+  $("teamList").querySelectorAll("button").forEach(b=>b.onclick=()=>{d.teams.splice(+b.dataset.i,1);renderSetup()});
+}
+function parTot(){const d=st.draft;$("parTotal").textContent=`Total par ${d.pars.slice(0,d.holes).reduce((a,b)=>a+b,0)}`}
+$("cfName").oninput=e=>st.draft.name=e.target.value;$("cfCourse").oninput=e=>st.draft.course=e.target.value;$("cfDate").oninput=e=>st.draft.date=e.target.value;
+$("cfHoles").onchange=e=>{st.draft.holes=+e.target.value;renderSetup()};
+$("addTeam").onclick=()=>{st.draft.teams.push({id:"t"+Math.random().toString(36).slice(2,8),name:`Team ${st.draft.teams.length+1}`,players:""});renderSetup();const i=st.draft.teams.length-1;$("tn"+i).focus();$("tn"+i).select()};
+$("cfSave").onclick=async()=>{
+  const d=st.draft,teams=d.teams.filter(t=>t.name.trim()).map(t=>({id:t.id,name:t.name.trim(),players:(t.players||"").trim()}));
+  const out={name:d.name.trim()||"Swing and Swig",course:d.course.trim(),date:d.date,holes:d.holes,pars:d.pars.slice(0,d.holes),teams};
+  $("cfSave").disabled=true;$("cfStatus").textContent="Saving…";
+  try{await API.call("PUT","config",out);await refresh();loadDraft();$("cfStatus").textContent="Setup saved. Everyone sees it now."}
+  catch(e){$("cfStatus").textContent=e.status===403?"Your chair sign-in has expired. Sign in again.":"Couldn't save the setup. Try again."}
+  $("cfSave").disabled=false;
+};
+
+function renderAll(){renderHeader();renderTeamSel();renderBoard();renderFeed();if(!$("view-card").hidden)renderCard();if(st.isChair){renderAdjList();$("lockChk").checked=!!cfg().locked}}
+
+/* ---------- sync (polls the server every few seconds) ---------- */
+let pending=0,writeSeq=0,lastRaw="",firstCfg=true,timer=null,inflight=null;
+function begin(){pending++;writeSeq++}
+function end(){pending--;writeSeq++;if(!pending)refresh()}
+function setLive(on){$("live").classList.toggle("off",!on);$("live").querySelector("span").textContent=on?"Live":st.ready?"Reconnecting":"Connecting";$("offline").hidden=on||!st.ready}
+function refresh(){
+  if(inflight)return inflight;
+  const ws=writeSeq;
+  inflight=(async()=>{
+    try{
+      const d=await API.call("GET","state");
+      setLive(true);
+      const raw=JSON.stringify(d);
+      st.ready=true;
+      if(raw===lastRaw)return;
+      lastRaw=raw;
+      st.config=d.config;
+      // Don't let a poll that raced with a score save undo what the player just tapped.
+      if(!pending&&ws===writeSeq)st.scores=d.scores||{};
+      else lastRaw="";
+      st.adjust=d.adjust||[];
+      chat.me=d.me;
+      const wasChair=st.isChair;st.isChair=!!d.isChair;
+      if(wasChair!==st.isChair){$("tab-chair").hidden=!st.isChair&&st.view!=="chair";renderChairGate();if(st.isChair)loadDraft()}
+      if(firstCfg){firstCfg=false;loadDraft()}
+      applyChat(d.chat||[]);
+      renderAll();
+    }catch(_){setLive(false)}
+    finally{inflight=null}
+  })();
+  return inflight;
+}
+function applyChat(msgs){
+  if(pending)return; // keep optimistic reactions until saved
+  if(chat.seen!==null&&$("view-chat").hidden){const fresh=msgs.filter(m=>!chat.seen.has(m.id)&&m.uid!==chat.me).length;if(fresh){chat.unread+=fresh;$("chatBadge").textContent=chat.unread;$("chatBadge").hidden=false}}
+  chat.seen=new Set(msgs.map(m=>m.id));chat.msgs=msgs;
+  renderChat();
+}
+function schedule(){clearInterval(timer);timer=setInterval(()=>{if(!document.hidden)refresh()},POLL_MS)}
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh()});
+window.addEventListener("online",refresh);
+
+/* ---------- boot ---------- */
+renderAll();loadDraft();renderName();renderChairGate();
+$("tab-chair").hidden=!API.pin;
+const h=(location.hash||"").slice(1);if(["board","card","chat","chair"].includes(h))show(h);
+refresh();schedule();
+})();
+</script>
+</body>
+</html>
