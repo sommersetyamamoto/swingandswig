@@ -3,9 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0d4a36">
+<meta name="theme-color" content="#231f21">
 <title>Swing and Swig</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%230d4a36'/%3E%3Cpath d='M11 6v21' stroke='%23fff' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M12 6l12 4.5L12 15z' fill='%23f2c230'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="img/icon-64.png">
+<link rel="apple-touch-icon" href="img/icon-180.png">
+<meta property="og:image" content="img/swing-and-swig-5th-annual.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600&display=swap">
@@ -17,37 +19,44 @@ img{max-width:100%}
 [hidden]{display:none!important}
 /* Layout: a manual tournament leaderboard — green header band, white board, hand-painted numbers; tabs for Board / Scorecard / Chair */
 :root{
-  --bg:#eef2ee; --board:#ffffff; --fg:#14231c; --muted:#5d6e65; --line:#d5ded8;
-  --green:#0d4a36; --green-ink:#ffffff; --flag:#f2c230; --flag-ink:#2b2100;
+  --bg:#f2f4f6; --board:#ffffff; --fg:#231f21; --muted:#5e6670; --line:#dce1e6;
+  --green:#006ba6; --green-ink:#ffffff; --flag:#006ba6; --flag-ink:#ffffff;
+  --head:#231f21; --head-accent:#4aa3df;
   --plus:#1f7a4d; --minus:#b3372b; --chip:#e3ebe6;
   --display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
-  --bg:#0b1511; --board:#13211b; --fg:#e7efe9; --muted:#9db0a5; --line:#24372e;
-  --green:#0f5a41; --green-ink:#ffffff; --flag:#f2c230; --flag-ink:#2b2100;
+  --bg:#121315; --board:#1c1e21; --fg:#eceef0; --muted:#a3aab2; --line:#2f3338;
+  --green:#0a72ae; --green-ink:#ffffff; --flag:#4aa3df; --flag-ink:#0b1620;
+  --head:#18161a; --head-accent:#4aa3df;
   --plus:#5fd39a; --minus:#ff8a7d; --chip:#1c2e26; color-scheme:dark}}
 :root[data-theme="dark"]{
-  --bg:#0b1511; --board:#13211b; --fg:#e7efe9; --muted:#9db0a5; --line:#24372e;
-  --green:#0f5a41; --green-ink:#ffffff; --flag:#f2c230; --flag-ink:#2b2100;
+  --bg:#121315; --board:#1c1e21; --fg:#eceef0; --muted:#a3aab2; --line:#2f3338;
+  --green:#0a72ae; --green-ink:#ffffff; --flag:#4aa3df; --flag-ink:#0b1620;
+  --head:#18161a; --head-accent:#4aa3df;
   --plus:#5fd39a; --minus:#ff8a7d; --chip:#1c2e26; color-scheme:dark}
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--fg);font-family:var(--body);font-size:15px;line-height:1.45}
-body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--green)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:10;background:var(--head)}
 .wrap{max-width:880px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
-header{background:var(--green);color:var(--green-ink);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
+header{background:var(--head);color:#fff;border-bottom:3px solid var(--green);position:sticky;top:env(safe-area-inset-top,0px);z-index:5}
 header .wrap{padding-block:14px 0;display:flex;flex-direction:column;gap:10px}
-.brand{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:14px}
+.brand .titles{flex:1;min-width:0}
+.logo{height:84px;width:auto;display:block;flex:none;margin-block:-4px}
+@media (max-width:520px){.logo{height:70px}.brand{gap:10px}}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
 h1{font-family:var(--display);font-weight:800;font-size:34px;letter-spacing:.02em;text-transform:uppercase;margin:0;line-height:1}
-h1 span{color:var(--flag)}
-.meta{font-size:13px;opacity:.85}
+h1 span{color:var(--head-accent)}
+.meta{font-size:13px;opacity:.85;letter-spacing:.02em}
 .live{display:inline-flex;align-items:center;gap:6px;font-size:12px;text-transform:uppercase;letter-spacing:.08em;font-weight:600}
-.live i{width:8px;height:8px;border-radius:50%;background:var(--flag)}
+.live i{width:8px;height:8px;border-radius:50%;background:var(--head-accent)}
 .live.off i{background:#9aa}
 nav{display:flex;gap:4px}
-nav button{font:600 15px var(--display);letter-spacing:.06em;text-transform:uppercase;background:none;border:0;color:var(--green-ink);opacity:.7;padding:10px 14px;border-bottom:3px solid transparent;cursor:pointer}
-nav button[aria-selected="true"]{opacity:1;border-color:var(--flag)}
-nav button:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--flag);outline-offset:2px}
+nav button{font:600 15px var(--display);letter-spacing:.06em;text-transform:uppercase;background:none;border:0;color:#fff;opacity:.7;padding:10px 14px;border-bottom:3px solid transparent;cursor:pointer}
+nav button[aria-selected="true"]{opacity:1;border-color:var(--head-accent)}
+nav button:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--head-accent);outline-offset:2px}
 main .wrap{padding-block:20px 48px;display:flex;flex-direction:column;gap:20px}
 h2{font:700 20px var(--display);text-transform:uppercase;letter-spacing:.05em;margin:0}
 h3{font:700 16px var(--display);text-transform:uppercase;letter-spacing:.06em;margin:0;color:var(--muted)}
@@ -79,9 +88,9 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 :root[data-theme="dark"] .total{color:var(--flag)}
 @media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .total{color:var(--flag)}}
 .adj.p{color:var(--plus);font-weight:600}.adj.m{color:var(--minus);font-weight:600}
-.lead .pos{color:var(--flag-ink);background:var(--flag)}
+.board tr.lead td.pos,.board tr.lead:hover td.pos{color:var(--flag-ink);background:var(--flag)}
 .detail td{background:var(--bg);padding:10px 12px}
-.mini{overflow-x:auto}
+.mini{overflow-x:auto;max-width:calc(100vw - 58px)}
 .mini table{border-collapse:collapse;font-size:13px;min-width:520px}
 .mini td,.mini th{border:1px solid var(--line);padding:4px 6px;text-align:center;font-variant-numeric:tabular-nums}
 .mini th{font:600 11px var(--display);letter-spacing:.06em;color:var(--muted)}
@@ -142,7 +151,7 @@ label.f{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu
 .tag.hid{background:var(--flag);color:var(--flag-ink)}
 .check{display:flex;align-items:center;gap:8px;font-size:14px}
 /* Chat */
-nav button .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:var(--flag);color:var(--flag-ink);font:700 12px var(--body);letter-spacing:0;line-height:18px;text-align:center}
+nav button .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:4px;border-radius:9px;background:var(--head-accent);color:#0b1620;font:700 12px var(--body);letter-spacing:0;line-height:18px;text-align:center}
 .chatlog{display:flex;flex-direction:column;gap:12px;max-height:60vh;overflow-y:auto;padding-right:4px}
 .msg{display:flex;flex-direction:column;gap:4px;max-width:88%;align-self:flex-start;min-width:0}
 .msg.mine{align-self:flex-end;align-items:flex-end}
@@ -161,7 +170,9 @@ nav button .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:
 @media (prefers-reduced-motion:no-preference){.flash{animation:fl 1.2s ease-out}@keyframes fl{from{background:color-mix(in srgb,var(--flag) 40%,transparent)}to{background:transparent}}}
 .namerow{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted);flex-wrap:wrap}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--plus);text-decoration:underline;cursor:pointer}
-footer{padding:0 0 32px;font-size:13px;color:var(--muted);text-align:center}
+footer{padding:8px 16px 36px;font-size:13px;color:var(--muted);text-align:center;display:flex;flex-direction:column;align-items:center;gap:18px}
+.presented{display:flex;flex-direction:column;align-items:center;gap:8px;font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+.presented img{width:min(260px,70vw);height:auto;display:block}
 footer a{color:inherit}
 </style>
 </head>
@@ -169,8 +180,9 @@ footer a{color:inherit}
 <header>
   <div class="wrap">
     <div class="brand">
-      <div>
-        <h1 id="evName">Swing <span>&amp;</span> Swig</h1>
+      <img class="logo" src="img/event-logo-white.png" width="480" height="368" alt="TWG Swing &amp; Swig, 5th Annual">
+      <div class="titles">
+        <h1 id="evName" class="sr">Swing <span>&amp;</span> Swig</h1>
         <div class="meta" id="evMeta">Stableford scramble</div>
       </div>
       <div class="live off" id="live"><i></i><span>Connecting</span></div>
@@ -301,7 +313,12 @@ footer a{color:inherit}
     </div>
   </section>
 </main>
-<footer class="wrap"><a href="#chair" id="chairLink">Tournament chair? Sign in</a></footer>
+<footer class="wrap">
+  <div class="presented">Presented by
+    <picture><source srcset="img/twg-wordmark-white.png" media="(prefers-color-scheme: dark)"><img src="img/twg-wordmark.png" width="1000" height="68" alt="The Wilhelm Group"></picture>
+  </div>
+  <a href="#chair" id="chairLink">Tournament chair? Sign in</a>
+</footer>
 
 <script>
 (function(){
