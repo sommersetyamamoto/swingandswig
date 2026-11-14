@@ -44,7 +44,7 @@ function needChair(chair) {
 }
 
 function defaultConfig() {
-  return { name: "Swing and Swig", course: "", date: "", holes: 18, pars: DEFAULT_PARS.slice(), teams: [], locked: false };
+  return { name: "Swing and Swig", course: "Kalauao Golf Course", date: "", holes: 18, pars: DEFAULT_PARS.slice(), teams: [], locked: false };
 }
 
 async function read(store, key, fallback) {

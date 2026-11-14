@@ -323,6 +323,7 @@ footer a{color:inherit}
 <script>
 (function(){
 const DEFAULT_PARS=[4,4,3,5,4,4,3,4,5,4,4,3,5,4,4,3,4,5];
+const DEFAULT_COURSE="Kalauao Golf Course";
 const REASONS=["Bought the chair a mai tai","Best dressed foursome","Slow play penalty","Excessive celebration","Lost ball, found friendship","Beverage cart MVPs","Mulligan tax","Sand trap souvenir","Chair's mood swing","Too much talking in the backswing","Spotted helping another team","Shotgun start, shotgun finish"];
 const POLL_MS=5000;
 const $=id=>document.getElementById(id);
@@ -344,7 +345,7 @@ const API={
   }
 };
 
-function cfg(){return st.config||{name:"Swing and Swig",course:"",date:"",pars:DEFAULT_PARS.slice(),teams:[],locked:false}}
+function cfg(){return st.config||{name:"Swing and Swig",course:DEFAULT_COURSE,date:"",pars:DEFAULT_PARS.slice(),teams:[],locked:false}}
 function pars(){const c=cfg();return (c.pars||DEFAULT_PARS).slice(0,c.holes||c.pars?.length||18)}
 function pts(strokes,par){if(strokes==null)return null;if(strokes==="P")return 0;return Math.max(0,2+par-strokes)}
 function label(strokes,par){if(strokes==="P")return"Picked up";const d=strokes-par;return({"-3":"Albatross","-2":"Eagle","-1":"Birdie","0":"Par","1":"Bogey","2":"Double bogey"})[d]??(d<-3?"Condor":`+${d}`)}
@@ -592,7 +593,7 @@ $("lockChk").onchange=async e=>{
 };
 
 /* ---------- chair: setup ---------- */
-function loadDraft(){const c=cfg();st.draft={name:c.name||"Swing and Swig",course:c.course||"",date:c.date||"",holes:c.holes||18,pars:(c.pars||DEFAULT_PARS).concat(DEFAULT_PARS.slice((c.pars||DEFAULT_PARS).length)).slice(0,18),teams:(c.teams||[]).map(t=>({...t}))};renderSetup()}
+function loadDraft(){const c=cfg();st.draft={name:c.name||"Swing and Swig",course:c.course??DEFAULT_COURSE,date:c.date||"",holes:c.holes||18,pars:(c.pars||DEFAULT_PARS).concat(DEFAULT_PARS.slice((c.pars||DEFAULT_PARS).length)).slice(0,18),teams:(c.teams||[]).map(t=>({...t}))};renderSetup()}
 function renderSetup(){
   const d=st.draft;$("cfName").value=d.name;$("cfCourse").value=d.course;$("cfDate").value=d.date;$("cfHoles").value=String(d.holes);
   let g="";for(let i=0;i<d.holes;i++)g+=`<label>${i+1}<input type="number" min="3" max="6" id="par${i}" value="${d.pars[i]}" inputmode="numeric"></label>`;
