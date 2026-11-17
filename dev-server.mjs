@@ -14,9 +14,22 @@ const ROOT = new URL("./public/", import.meta.url).pathname;
 const mem = new Map();
 let n = 0;
 const store = {
-  async get(key) {
+  async get(key, opts = {}) {
     const e = mem.get(key);
-    return e ? structuredClone(e.data) : null;
+    if (!e) return null;
+    return opts.type === "arrayBuffer" ? e.data.slice(0) : structuredClone(e.data);
+  },
+  async getMetadata(key) {
+    const e = mem.get(key);
+    return e ? { etag: e.etag, metadata: {} } : null;
+  },
+  async set(key, buf) {
+    const etag = String(++n);
+    mem.set(key, { data: buf.slice(0), etag });
+    return { modified: true, etag };
+  },
+  async delete(key) {
+    mem.delete(key);
   },
   async getWithMetadata(key) {
     const e = mem.get(key);

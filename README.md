@@ -4,7 +4,7 @@ A live leaderboard for a Stableford scramble. Players enter scores from their ph
 
 - **Leaderboard**: live standings, tap a team to see its card, and the chair's rulings feed
 - **Scorecard**: one-tap stroke entry per hole, with points worked out for you
-- **Chat**: clubhouse trash talk with emoji reactions
+- **Chat**: clubhouse trash talk with emoji reactions, photos and videos
 - **Chair** (PIN-protected): rulings, including hidden ones you reveal later, the "Roll a wildcard" button, scorecard lock, and event setup (name, course, date, 9 or 18 holes, pars, teams)
 
 Stableford points: double bogey or worse 0 · bogey 1 · par 2 · birdie 3 · eagle 4 · albatross 5.
@@ -32,6 +32,13 @@ npm run dev
 ```
 
 Then open http://localhost:8888 and use chair PIN `1234`. Local data is kept in memory and resets when the server stops. `netlify dev` also works if you have the Netlify CLI.
+
+## Photos and videos in chat
+
+- Photos are shrunk on the phone (to 1600px JPEG) before uploading, so they're quick even on a weak signal.
+- Videos can be up to **50 MB** (roughly 30 seconds of iPhone 1080p video). They upload in 3 MB pieces because Netlify Functions accept about 6 MB per request, and they play back with seeking.
+- Files live in the same Netlify Blobs store as everything else. Deleting a message deletes its photo or video too. The chat keeps the newest 300 messages and removes older files with them.
+- Every view of a video streams through the site's function, so lots of video counts against your Netlify bandwidth and function usage.
 
 ## Notes
 

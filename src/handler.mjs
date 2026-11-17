@@ -4,13 +4,24 @@
 //   config  – event setup, teams, pars, lock flag
 //   scores  – { [teamId]: { holes: { [hole]: strokes | "P" }, updatedAt } }
 //   adjust  – chair rulings [{ id, teamId, points, reason, hidden, at }]
-//   chat    – messages [{ id, uid, name, teamId, text, at, reactions }]
+//   chat    – messages [{ id, uid, name, teamId, text, media?, at, reactions }]
+// plus uploaded photos/videos under media/<id>/meta and media/<id>/<chunk#>.
+// Netlify Functions accept ~6 MB per request, so files arrive in 3 MB chunks
+// and are served back with HTTP Range support (iPhones need it for video).
 import { createHash, timingSafeEqual, randomBytes } from "node:crypto";
 
 export const REACTS = ["up", "lol", "fire", "flag", "beer", "clap"];
 const DEFAULT_PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
 const CHAT_KEEP = 300;
 const CHAT_SEND = 150;
+const MEDIA_CHUNK = 3 * 1024 * 1024;
+const MEDIA_TYPES = {
+  "image/jpeg": "image", "image/png": "image", "image/webp": "image", "image/gif": "image",
+  "video/mp4": "video", "video/quicktime": "video", "video/webm": "video", "video/x-m4v": "video", "video/3gpp": "video",
+};
+const MEDIA_MAX = { image: 10 * 1024 * 1024, video: 50 * 1024 * 1024 };
+const mkey = (id, part) => `media/${id}/${part}`;
+const isId = (v) => typeof v === "string" && /^[a-f0-9]{16}$/.test(v);
 
 class HttpError extends Error {
   constructor(status, code, message) {
@@ -128,6 +139,108 @@ async function putScore(store, b, chair) {
   return { scores };
 }
 
+async function mediaMeta(store, id) {
+  if (!isId(id)) throw new HttpError(404, "not_found", "No such file.");
+  const meta = await read(store, mkey(id, "meta"), null);
+  if (!meta) throw new HttpError(404, "not_found", "No such file.");
+  return meta;
+}
+
+async function deleteMedia(store, id) {
+  if (!isId(id)) return;
+  const meta = await read(store, mkey(id, "meta"), null);
+  if (!meta) return;
+  await Promise.all([...Array(meta.chunks).keys()].map((n) => store.delete(mkey(id, n))));
+  await store.delete(mkey(id, "meta"));
+}
+
+async function serveMedia(store, id, req) {
+  const meta = await mediaMeta(store, id);
+  if (!meta.complete) throw new HttpError(404, "not_found", "Still uploading.");
+  // Chrome plays H.264 .mov files when they're labelled mp4; Safari doesn't mind either way.
+  const type = meta.type === "video/quicktime" ? "video/mp4" : meta.type;
+  const headers = {
+    "content-type": type,
+    "accept-ranges": "bytes",
+    "x-content-type-options": "nosniff",
+    "content-security-policy": "sandbox",
+    "cache-control": "public, max-age=31536000, immutable",
+  };
+  const chunk = async (n) => {
+    const buf = await store.get(mkey(id, n), { type: "arrayBuffer" });
+    if (!buf) throw new HttpError(404, "not_found", "File is missing a piece.");
+    return buf;
+  };
+  const m = /^bytes=(\d*)-(\d*)$/.exec((req.headers.get("range") || "").trim());
+  if (m && (m[1] || m[2])) {
+    let start, end;
+    if (m[1] === "") {
+      start = Math.max(0, meta.size - +m[2]);
+      end = meta.size - 1;
+    } else {
+      start = +m[1];
+      end = m[2] === "" ? meta.size - 1 : Math.min(+m[2], meta.size - 1);
+    }
+    if (start >= meta.size || start > end)
+      return new Response(null, { status: 416, headers: { ...headers, "content-range": `bytes */${meta.size}` } });
+    // Answer from a single stored chunk; players ask again for the rest.
+    const ci = Math.floor(start / meta.chunkSize), base = ci * meta.chunkSize;
+    end = Math.min(end, base + meta.chunkSize - 1);
+    const buf = await chunk(ci);
+    return new Response(buf.slice(start - base, end - base + 1), {
+      status: 206,
+      headers: { ...headers, "cache-control": "private, max-age=86400", "content-range": `bytes ${start}-${end}/${meta.size}` },
+    });
+  }
+  if (meta.chunks === 1)
+    return new Response(await chunk(0), { status: 200, headers: { ...headers, "netlify-cdn-cache-control": "public, max-age=604800" } });
+  let n = 0;
+  const body = new ReadableStream({
+    async pull(ctrl) {
+      if (n >= meta.chunks) return ctrl.close();
+      ctrl.enqueue(new Uint8Array(await chunk(n++)));
+    },
+  });
+  return new Response(body, { status: 200, headers: { ...headers, "content-length": String(meta.size) } });
+}
+
+async function media(store, req, method, uid, b, c) {
+  if (method === "GET" && b && c === "file") return serveMedia(store, b, req);
+  if (!uid) throw new HttpError(400, "no_key", "Missing client key.");
+  if (method === "POST" && !b) {
+    const body = await req.json().catch(() => ({}));
+    const kind = MEDIA_TYPES[body.type];
+    if (!kind) throw bad("Only photos (JPEG, PNG, WebP, GIF) and videos (MP4, MOV, WebM) can be shared.");
+    const size = Math.round(+body.size);
+    if (!(size > 0)) throw bad("That file is empty.");
+    if (size > MEDIA_MAX[kind])
+      throw new HttpError(413, "too_big", kind === "video" ? "Videos can be up to 50 MB. Try a shorter clip." : "Photos can be up to 10 MB.");
+    const dim = (v) => (Number.isFinite(+v) && +v > 0 && +v < 20000 ? Math.round(+v) : 0);
+    const id = newId();
+    const meta = { id, uid, type: body.type, kind, size, chunkSize: MEDIA_CHUNK, chunks: Math.ceil(size / MEDIA_CHUNK), w: dim(body.w), h: dim(body.h), complete: false, at: Date.now() };
+    await store.setJSON(mkey(id, "meta"), meta);
+    return json({ id, chunkSize: MEDIA_CHUNK, chunks: meta.chunks });
+  }
+  const meta = await mediaMeta(store, b);
+  if (meta.uid !== uid) throw new HttpError(403, "not_owner", "That upload belongs to someone else.");
+  if (method === "PUT" && /^\d+$/.test(c || "")) {
+    const n = +c;
+    if (meta.complete || n >= meta.chunks) throw bad("Unexpected piece.");
+    const buf = await req.arrayBuffer();
+    const want = Math.min(meta.chunkSize, meta.size - n * meta.chunkSize);
+    if (buf.byteLength !== want) throw bad("That piece is the wrong size.");
+    await store.set(mkey(meta.id, n), buf);
+    return json({ ok: true });
+  }
+  if (method === "POST" && c === "done") {
+    const have = await Promise.all([...Array(meta.chunks).keys()].map((n) => store.getMetadata(mkey(meta.id, n))));
+    if (have.some((x) => !x)) throw bad("Upload isn't finished.");
+    await mutate(store, mkey(meta.id, "meta"), null, (cur) => ({ ...cur, complete: true }));
+    return json({ media: { id: meta.id, kind: meta.kind, w: meta.w, h: meta.h } });
+  }
+  throw new HttpError(404, "not_found", "No such endpoint.");
+}
+
 export async function handle(req, { store, chairPin }) {
   const url = new URL(req.url);
   const [a, b, c] = url.pathname.replace(/^\/api\/?/, "").split("/").filter(Boolean);
@@ -136,6 +249,8 @@ export async function handle(req, { store, chairPin }) {
   const uid = uidFrom(req);
 
   try {
+    if (a === "media") return await media(store, req, method, uid, b, c);
+
     let body = {};
     if (method === "POST" || method === "PUT" || method === "PATCH") {
       try {
@@ -198,10 +313,23 @@ export async function handle(req, { store, chairPin }) {
       if (method === "POST" && !b) {
         const text = str(body.text, 280);
         const name = str(body.name, 30);
-        if (!text) throw bad("Message is empty.");
+        let attached = null;
+        if (body.media) {
+          const meta = await mediaMeta(store, body.media.id);
+          if (meta.uid !== uid || !meta.complete) throw bad("That photo or video hasn't finished uploading.");
+          attached = { id: meta.id, kind: meta.kind, w: meta.w, h: meta.h };
+        }
+        if (!text && !attached) throw bad("Message is empty.");
         if (!name) throw bad("Add your name first.");
         const msg = { id: newId(), uid, name, teamId: str(body.teamId, 24), text, at: Date.now(), reactions: {} };
-        await mutate(store, "chat", [], (list) => [...list, msg].slice(-CHAT_KEEP));
+        if (attached) msg.media = attached;
+        let dropped = [];
+        await mutate(store, "chat", [], (list) => {
+          const all = [...list, msg];
+          dropped = all.slice(0, Math.max(0, all.length - CHAT_KEEP));
+          return all.slice(-CHAT_KEEP);
+        });
+        await Promise.all(dropped.filter((m) => m.media).map((m) => deleteMedia(store, m.media.id)));
         return json({ msg });
       }
       if (b && c === "react" && method === "POST") {
@@ -219,16 +347,15 @@ export async function handle(req, { store, chairPin }) {
         return json({ ok: true });
       }
       if (b && !c && method === "DELETE") {
-        let denied = false;
+        let denied = false, removed = null;
         await mutate(store, "chat", [], (list) => {
           const m = list.find((x) => x.id === b);
-          if (m && m.uid !== uid && !chair) {
-            denied = true;
-            return list;
-          }
-          return list.filter((x) => x.id !== b);
+          denied = !!(m && m.uid !== uid && !chair);
+          removed = denied ? null : m;
+          return denied ? list : list.filter((x) => x.id !== b);
         });
         if (denied) throw new HttpError(403, "not_owner", "You can only delete your own messages.");
+        if (removed?.media) await deleteMedia(store, removed.media.id);
         return json({ ok: true });
       }
     }
