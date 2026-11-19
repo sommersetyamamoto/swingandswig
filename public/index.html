@@ -273,9 +273,9 @@ footer a{color:inherit}
   <section class="wrap" id="view-chair" hidden>
     <div class="panel" id="chairLogin">
       <h2>Chair sign-in</h2>
-      <p class="note">Enter the chair PIN to add rulings, lock scorecards, and set up the event.</p>
+      <p class="note">Enter the chair password to add rulings, lock scorecards, and set up the event.</p>
       <form class="row" id="pinForm">
-        <label class="f">PIN<input id="pinInput" type="password" autocomplete="current-password" inputmode="numeric"></label>
+        <label class="f">Password<input id="pinInput" type="password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false"></label>
         <button class="btn primary" type="submit">Sign in</button>
       </form>
       <div class="status" id="pinStatus"></div>
@@ -675,7 +675,7 @@ $("pinForm").addEventListener("submit",async e=>{
   $("pinStatus").textContent="Checking…";
   const old=API.pin;API.pin=pin;
   try{await API.call("POST","chair/check",{});ls.set("ss-pin",pin);$("pinInput").value="";$("pinStatus").textContent="";st.isChair=true;loadDraft();$("tab-chair").hidden=false;renderChairGate();lastRaw="";refresh()}
-  catch(err){API.pin=old;$("pinStatus").textContent=err.status===403||err.status===503?err.message:"Couldn't check the PIN. Try again."}
+  catch(err){API.pin=old;$("pinStatus").textContent=err.status===403||err.status===503?err.message:"Couldn't check the password. Try again."}
 });
 $("chairOut").onclick=()=>{API.pin="";ls.set("ss-pin",null);st.isChair=false;$("tab-chair").hidden=true;lastRaw="";show("board");renderChairGate();refresh()};
 

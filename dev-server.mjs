@@ -68,4 +68,4 @@ http
       res.writeHead(404).end("Not found");
     }
   })
-  .listen(PORT, () => console.log(`Swing & Swig running at http://localhost:${PORT}  (chair PIN: ${chairPin})`));
+  .listen(PORT, () => console.log(`Swing & Swig running at http://localhost:${PORT}  (chair password: ${chairPin})`));

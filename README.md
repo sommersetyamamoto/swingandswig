@@ -5,7 +5,7 @@ A live leaderboard for a Stableford scramble. Players enter scores from their ph
 - **Leaderboard**: live standings, tap a team to see its card, and the chair's rulings feed
 - **Scorecard**: one-tap stroke entry per hole, with points worked out for you
 - **Chat**: clubhouse trash talk with emoji reactions, photos and videos
-- **Chair** (PIN-protected): rulings, including hidden ones you reveal later, the "Roll a wildcard" button, scorecard lock, and event setup (name, course, date, 9 or 18 holes, pars, teams)
+- **Chair** (password-protected): rulings, including hidden ones you reveal later, the "Roll a wildcard" button, scorecard lock, and event setup (name, course, date, 9 or 18 holes, pars, teams)
 
 Stableford points: double bogey or worse 0 · bogey 1 · par 2 · birdie 3 · eagle 4 · albatross 5.
 
@@ -20,8 +20,8 @@ Stableford points: double bogey or worse 0 · bogey 1 · par 2 · birdie 3 · ea
 
 1. Push this folder to a new GitHub repo.
 2. In Netlify: **Add new site → Import an existing project → GitHub**, then pick the repo. The build settings come from `netlify.toml`, so leave them as they are.
-3. In **Site configuration → Environment variables**, add `CHAIR_PIN` with a PIN only the chair knows. Then trigger a redeploy so the PIN takes effect.
-4. Open the site, tap **Tournament chair? Sign in** at the bottom (or go to `/#chair`), enter the PIN, and set up the event and teams.
+3. In **Site configuration → Environment variables**, add `CHAIR_PIN` set to the chair password (letters, numbers or both). Then trigger a redeploy so it takes effect.
+4. Open the site, tap **Tournament chair? Sign in** at the bottom (or go to `/#chair`), enter the chair password, and set up the event and teams.
 5. Share the link with players. They choose their team on the Scorecard tab.
 
 ## Run locally
@@ -31,7 +31,7 @@ npm install
 npm run dev
 ```
 
-Then open http://localhost:8888 and use chair PIN `1234`. Local data is kept in memory and resets when the server stops. `netlify dev` also works if you have the Netlify CLI.
+Then open http://localhost:8888 and use chair password `1234`. Local data is kept in memory and resets when the server stops. `netlify dev` also works if you have the Netlify CLI.
 
 ## Photos and videos in chat
 

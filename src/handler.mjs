@@ -267,7 +267,7 @@ export async function handle(req, { store, chairPin }) {
     // ---- chair sign-in check ----
     if (method === "POST" && a === "chair" && b === "check") {
       if (!chairPin) throw new HttpError(503, "no_pin", "CHAIR_PIN isn't set in Netlify yet.");
-      if (!chair) throw new HttpError(403, "bad_pin", "That PIN isn't right.");
+      if (!chair) throw new HttpError(403, "bad_pin", "That password isn't right.");
       return json({ ok: true });
     }
 
