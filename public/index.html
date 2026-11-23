@@ -182,6 +182,8 @@ nav button .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:
 .composer{display:flex;gap:8px}
 .composer input{flex:1}
 @media (prefers-reduced-motion:no-preference){.flash{animation:fl 1.2s ease-out}@keyframes fl{from{background:color-mix(in srgb,var(--flag) 40%,transparent)}to{background:transparent}}}
+#nameAsk .f{flex:none}
+#nameShow #nameTeam{margin-left:-4px}
 .namerow{display:flex;gap:8px;align-items:center;font-size:13px;color:var(--muted);flex-wrap:wrap}
 .linkbtn{background:none;border:0;padding:0;font:inherit;color:var(--plus);text-decoration:underline;cursor:pointer}
 footer{padding:8px 16px 36px;font-size:13px;color:var(--muted);text-align:center;display:flex;flex-direction:column;align-items:center;gap:18px}
@@ -257,8 +259,12 @@ footer a{color:inherit}
     <div class="panel">
       <h2>Clubhouse chat</h2>
       <div class="chatlog" id="chatLog"><p class="note">No messages yet. Post the first one below.</p></div>
-      <div class="namerow" id="nameShow" hidden>Posting as <b id="nameVal"></b><button type="button" class="linkbtn" id="nameEdit">Change</button></div>
-      <label class="f" id="nameAsk">Your name<input id="chatName" maxlength="30" autocomplete="nickname" placeholder="So everyone knows who's talking"></label>
+      <div class="namerow" id="nameShow" hidden>Posting as <b id="nameVal"></b><span id="nameTeam"></span><button type="button" class="linkbtn" id="nameEdit">Change</button></div>
+      <div id="nameAsk" style="display:flex;flex-direction:column;gap:4px">
+        <label class="f">Your name<input id="chatName" maxlength="40" autocomplete="off" list="playerList" placeholder="Start typing to find yourself"></label>
+        <div class="status" id="nameHint"></div>
+      </div>
+      <datalist id="playerList"></datalist>
       <div class="attach-prev" id="attachPrev" hidden></div>
       <form class="composer" id="chatForm">
         <label class="btn attach" title="Add a photo or video"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg><input type="file" id="attachInput" class="sr" accept="image/*,video/*" aria-label="Add a photo or video"></label>
@@ -390,9 +396,37 @@ window.addEventListener("hashchange",()=>{const h=location.hash.slice(1);if(["bo
 /* ---------- chat ---------- */
 const REACTS=[["up","👍"],["lol","😂"],["fire","🔥"],["flag","⛳"],["beer","🍺"],["clap","👏"]];
 const chat={msgs:[],me:null,unread:0,seen:null,picker:null,confirmDel:null,name:ls.get("ss-name")||""};
+/* Players are listed per team as "Name / Name" in setup; match a typed name to its team. */
+const norm=s=>String(s||"").normalize("NFKD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/[‘’`]/g,"'").replace(/[^a-z0-9' -]/g," ").replace(/\s+/g," ").trim();
+function roster(){
+  const out=[];
+  (cfg().teams||[]).forEach(t=>String(t.players||"").split(/\s*(?:\/|,|&|\+|\band\b)\s*/i).map(x=>x.trim()).filter(Boolean).forEach(name=>out.push({name,team:t})));
+  return out;
+}
+function findPlayer(typed){
+  const q=norm(typed);if(!q)return null;
+  const r=roster();
+  const exact=r.find(p=>norm(p.name)===q);if(exact)return exact;
+  const first=r.filter(p=>norm(p.name).split(" ")[0]===q);if(first.length===1)return first[0];
+  const starts=r.filter(p=>norm(p.name).startsWith(q));if(q.length>=3&&starts.length===1)return starts[0];
+  return null;
+}
+function chatTeamId(){const p=findPlayer(chat.name);return p?p.team.id:(ls.get("ss-team")||"")}
+function renderRoster(){
+  const opts=roster().map(p=>`<option value="${esc(p.name)}">${esc(p.team.name)}</option>`).join("");
+  if($("playerList").innerHTML!==opts)$("playerList").innerHTML=opts;
+  const p=findPlayer(chat.name);$("nameTeam").textContent=p?" · "+p.team.name:"";
+  nameHint();
+}
+function nameHint(){
+  const v=$("chatName").value.trim(),p=findPlayer(v);
+  $("nameHint").textContent=!v?"":p?`Team: ${p.team.name}`:roster().length?"Not on the team list. That's fine, you can still chat.":"";
+}
+$("chatName").addEventListener("input",nameHint);
 function renderName(){
   const has=!!chat.name;$("nameAsk").hidden=has;$("nameShow").hidden=!has;$("nameVal").textContent=chat.name;
   if(!has)$("chatName").value="";
+  renderRoster();
 }
 $("nameEdit").onclick=()=>{$("chatName").value=chat.name;$("nameAsk").hidden=false;$("nameShow").hidden=true;$("chatName").focus()};
 const mediaEls=new Map(),msgNodes=new Map();
@@ -552,11 +586,17 @@ $("chatForm").addEventListener("submit",async e=>{
   const text=$("chatInput").value.trim(),media=att&&att.media;
   if(att&&!media&&!att.error){$("chatStatus").textContent="Hang on, still uploading.";return}
   if(!text&&!media)return;
-  const nm=($("nameAsk").hidden?chat.name:$("chatName").value.trim()).slice(0,30);
+  const typed=$("nameAsk").hidden?chat.name:$("chatName").value.trim(),match=findPlayer(typed);
+  // Use the roster spelling when they typed a first name or a different case.
+  const nm=(match&&norm(typed)!==norm(match.name)&&norm(match.name).startsWith(norm(typed))?match.name:typed).slice(0,40);
   if(!nm){$("chatStatus").textContent="Add your name first.";$("chatName").focus();return}
-  if(nm!==chat.name){chat.name=nm;ls.set("ss-name",nm);renderName()}
+  if(nm!==chat.name){
+    chat.name=nm;ls.set("ss-name",nm);renderName();
+    // Also preselect their team on the Scorecard tab if they haven't picked one yet.
+    const p=findPlayer(nm);if(p&&!ls.get("ss-team")){st.team=p.team.id;ls.set("ss-team",st.team);renderTeamSel()}
+  }
   $("chatSend").disabled=true;
-  try{const d=await API.call("POST","chat",{name:nm,teamId:st.team||"",text,media:media?{id:media.id}:undefined});$("chatInput").value="";$("chatStatus").textContent="";if(media)clearAttach();chat.msgs.push(d.msg);chat.seen&&chat.seen.add(d.msg.id);renderChat(true)}
+  try{const d=await API.call("POST","chat",{name:nm,teamId:chatTeamId(),text,media:media?{id:media.id}:undefined});$("chatInput").value="";$("chatStatus").textContent="";if(media)clearAttach();chat.msgs.push(d.msg);chat.seen&&chat.seen.add(d.msg.id);renderChat(true)}
   catch(err){$("chatStatus").textContent=err.status===400?err.message:"Message didn't send. Check your signal and try again."}
   $("chatSend").disabled=false;updateSend();$("chatInput").focus();refresh();
 });
@@ -747,7 +787,7 @@ $("cfSave").onclick=async()=>{
   $("cfSave").disabled=false;
 };
 
-function renderAll(){renderHeader();renderTeamSel();renderBoard();renderFeed();if(!$("view-card").hidden)renderCard();if(st.isChair){renderAdjList();$("lockChk").checked=!!cfg().locked}}
+function renderAll(){renderHeader();renderTeamSel();renderRoster();renderBoard();renderFeed();if(!$("view-card").hidden)renderCard();if(st.isChair){renderAdjList();$("lockChk").checked=!!cfg().locked}}
 
 /* ---------- sync (polls the server every few seconds) ---------- */
 let pending=0,writeSeq=0,lastRaw="",firstCfg=true,timer=null,inflight=null;

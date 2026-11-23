@@ -312,7 +312,7 @@ export async function handle(req, { store, chairPin }) {
       if (!uid) throw new HttpError(400, "no_key", "Missing client key.");
       if (method === "POST" && !b) {
         const text = str(body.text, 280);
-        const name = str(body.name, 30);
+        const name = str(body.name, 40);
         let attached = null;
         if (body.media) {
           const meta = await mediaMeta(store, body.media.id);
