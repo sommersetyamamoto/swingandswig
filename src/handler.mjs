@@ -5,6 +5,7 @@
 //   scores  – { [teamId]: { holes: { [hole]: strokes | "P" }, updatedAt } }
 //   adjust  – chair rulings [{ id, teamId, points, reason, hidden, at }]
 //   chat    – messages [{ id, uid, name, teamId, text, media?, at, reactions }]
+//             plus chair rulings echoed into chat: { kind: "ruling", ruling: { adjustId, teamId, points, reason } }
 // plus uploaded photos/videos under media/<id>/meta and media/<id>/<chunk#>.
 // Netlify Functions accept ~6 MB per request, so files arrive in 3 MB chunks
 // and are served back with HTTP Range support (iPhones need it for video).
@@ -138,6 +139,25 @@ async function putScore(store, b, chair) {
   });
   return { scores };
 }
+
+async function appendChat(store, msg) {
+  let dropped = [];
+  await mutate(store, "chat", [], (list) => {
+    const all = [...list, msg];
+    dropped = all.slice(0, Math.max(0, all.length - CHAT_KEEP));
+    return all.slice(-CHAT_KEEP);
+  });
+  await Promise.all(dropped.filter((m) => m.media).map((m) => deleteMedia(store, m.media.id)));
+}
+
+// A ruling shows in chat once it's public; hiding or removing it takes it back out.
+const postRuling = (store, item) =>
+  appendChat(store, {
+    id: newId(), uid: "", name: "Tournament chair", kind: "ruling", text: "", at: Date.now(), reactions: {},
+    ruling: { adjustId: item.id, teamId: item.teamId, points: item.points, reason: item.reason },
+  });
+const unpostRuling = (store, adjustId) =>
+  mutate(store, "chat", [], (list) => list.filter((m) => m.ruling?.adjustId !== adjustId));
 
 async function mediaMeta(store, id) {
   if (!isId(id)) throw new HttpError(404, "not_found", "No such file.");
@@ -295,14 +315,25 @@ export async function handle(req, { store, chairPin }) {
         const teamId = String(body.teamId || "");
         const item = { id: newId(), teamId, points, reason: str(body.reason, 120), hidden: !!body.hidden, at: Date.now() };
         await mutate(store, "adjust", [], (list) => [...list, item].slice(-500));
+        if (!item.hidden) await postRuling(store, item);
         return json({ item });
       }
       if (b && method === "PATCH") {
-        await mutate(store, "adjust", [], (list) => list.map((x) => (x.id === b ? { ...x, hidden: !!body.hidden } : x)));
+        let before = null, after = null;
+        await mutate(store, "adjust", [], (list) =>
+          list.map((x) => {
+            if (x.id !== b) return x;
+            before = x;
+            return (after = { ...x, hidden: !!body.hidden });
+          })
+        );
+        if (before && after && before.hidden && !after.hidden) await postRuling(store, after);
+        if (before && after && !before.hidden && after.hidden) await unpostRuling(store, b);
         return json({ ok: true });
       }
       if (b && method === "DELETE") {
         await mutate(store, "adjust", [], (list) => list.filter((x) => x.id !== b));
+        await unpostRuling(store, b);
         return json({ ok: true });
       }
     }
@@ -323,13 +354,7 @@ export async function handle(req, { store, chairPin }) {
         if (!name) throw bad("Add your name first.");
         const msg = { id: newId(), uid, name, teamId: str(body.teamId, 24), text, at: Date.now(), reactions: {} };
         if (attached) msg.media = attached;
-        let dropped = [];
-        await mutate(store, "chat", [], (list) => {
-          const all = [...list, msg];
-          dropped = all.slice(0, Math.max(0, all.length - CHAT_KEEP));
-          return all.slice(-CHAT_KEEP);
-        });
-        await Promise.all(dropped.filter((m) => m.media).map((m) => deleteMedia(store, m.media.id)));
+        await appendChat(store, msg);
         return json({ msg });
       }
       if (b && c === "react" && method === "POST") {

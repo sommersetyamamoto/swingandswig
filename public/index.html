@@ -165,6 +165,12 @@ nav button .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:
 .reacts .add{color:var(--muted)}
 .reacts .del{color:var(--minus);border-color:transparent;background:none}
 .picker{display:flex;gap:4px;flex-wrap:wrap}
+.msg.ruling-msg{align-self:stretch;max-width:100%;align-items:center}
+.rcard{display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:center;width:100%;max-width:420px;padding:10px 12px;border:1px solid var(--line);border-left:4px solid var(--green);border-radius:8px;background:var(--bg)}
+.rcard .pts{font:800 22px var(--display);text-align:center;border-radius:4px;padding:2px 0}
+.rcard .pts.p{background:color-mix(in srgb,var(--plus) 15%,transparent);color:var(--plus)}
+.rcard .pts.m{background:color-mix(in srgb,var(--minus) 15%,transparent);color:var(--minus)}
+.rcard b{font-family:var(--display);text-transform:uppercase;letter-spacing:.03em;font-size:16px}
 .media{border-radius:10px;overflow:hidden;background:var(--chip);width:260px;max-width:100%}
 .media img,.media video{display:block;width:100%;height:100%;object-fit:cover;background:#000}
 .media img{cursor:zoom-in}
@@ -290,7 +296,7 @@ footer a{color:inherit}
     <div id="chairTools" hidden style="display:flex;flex-direction:column;gap:20px">
     <div class="panel">
       <h2>Rulings</h2>
-      <p class="note">Award or deduct points from any team. Hidden rulings don't count, and players can't see them, until you reveal them. Good for a post-round announcement.</p>
+      <p class="note">Award or deduct points from any team. Rulings also post to the chat. Hidden rulings don't count, and players can't see them, until you reveal them, which is when they hit the chat. Good for a post-round announcement.</p>
       <div class="row">
         <label class="f">Team<select id="adjTeam"></select></label>
         <div class="stepper"><button id="adjMinus" aria-label="Fewer points">−</button><output id="adjPts" class="num">+1</output><button id="adjPlus" aria-label="More points">+</button></div>
@@ -409,6 +415,7 @@ function findPlayer(typed){
   const exact=r.find(p=>norm(p.name)===q);if(exact)return exact;
   const first=r.filter(p=>norm(p.name).split(" ")[0]===q);if(first.length===1)return first[0];
   const starts=r.filter(p=>norm(p.name).startsWith(q));if(q.length>=3&&starts.length===1)return starts[0];
+  const last=r.filter(p=>norm(p.name).split(" ").slice(-1)[0]===q.split(" ").slice(-1)[0]);if(q.length>=3&&last.length===1&&norm(last[0].name).split(" ")[0][0]===q[0])return last[0];
   return null;
 }
 function chatTeamId(){const p=findPlayer(chat.name);return p?p.team.id:(ls.get("ss-team")||"")}
@@ -441,15 +448,26 @@ function mediaEl(md){
 }
 function msgHtml(m,teams){
   const mine=m.uid&&m.uid===chat.me,r=m.reactions||{};
-  const who=mine?"You":(m.name||"A golfer");
   const time=m.at?new Date(m.at).toLocaleTimeString([],{hour:"numeric",minute:"2-digit"}):"";
-  const chips=REACTS.map(([k,e])=>{const set=r[k]||{},n=Object.values(set).filter(Boolean).length;if(!n)return"";
-    return `<button data-r="${k}" data-id="${esc(m.id)}" class="${set[chat.me]?"on":""}" aria-label="${e} ${n}">${e} ${n}</button>`}).join("");
-  const picker=chat.picker===m.id?`<span class="picker">${REACTS.map(([k,e])=>`<button data-r="${k}" data-id="${esc(m.id)}" aria-label="React ${e}">${e}</button>`).join("")}</span>`:"";
-  const canDel=mine||st.isChair;
-  return `<div class="msg${mine?" mine":""}"><div class="who"><b>${esc(who)}</b>${m.teamId&&teams[m.teamId]?" · "+esc(teams[m.teamId]):""} · ${time}</div>
+  const reacts=()=>{
+    const chips=REACTS.map(([k,e])=>{const set=r[k]||{},n=Object.values(set).filter(Boolean).length;if(!n)return"";
+      return `<button data-r="${k}" data-id="${esc(m.id)}" class="${set[chat.me]?"on":""}" aria-label="${e} ${n}">${e} ${n}</button>`}).join("");
+    const picker=chat.picker===m.id?`<span class="picker">${REACTS.map(([k,e])=>`<button data-r="${k}" data-id="${esc(m.id)}" aria-label="React ${e}">${e}</button>`).join("")}</span>`:"";
+    const canDel=mine||st.isChair;
+    return `<div class="reacts">${chips}<button class="add" data-pick="${esc(m.id)}" aria-label="Add reaction">${chat.picker===m.id?"×":"☺ +"}</button>${picker}${canDel?`<button class="del" data-del="${esc(m.id)}">${chat.confirmDel===m.id?"Confirm delete":"Delete"}</button>`:""}</div>`;
+  };
+  if(m.kind==="ruling"&&m.ruling){
+    const p=+m.ruling.points;
+    return `<div class="msg ruling-msg"><div class="who"><b>⚖️ Chair's ruling</b> · ${time}</div>
+      <div class="rcard"><span class="pts ${p>=0?"p":"m"}">${p>0?"+":""}${p}</span><div><b>${esc(teams[m.ruling.teamId]||"Former team")}</b><div>${esc(m.ruling.reason||"No reason given. The chair's decision is final.")}</div></div></div>
+      ${reacts()}</div>`;
+  }
+  const who=mine?"You":(m.name||"A golfer");
+  // Team comes from the current roster when the name matches a player, so old or mis-tagged messages show the right team.
+  const tp=findPlayer(m.name),team=tp?tp.team.name:(m.teamId&&teams[m.teamId]);
+  return `<div class="msg${mine?" mine":""}"><div class="who"><b>${esc(who)}</b>${team?" · "+esc(team):""} · ${time}</div>
     ${m.media?`<div class="media-slot"></div>`:""}${m.text?`<div class="bubble">${esc(m.text)}</div>`:""}
-    <div class="reacts">${chips}<button class="add" data-pick="${esc(m.id)}" aria-label="Add reaction">${chat.picker===m.id?"×":"☺ +"}</button>${picker}${canDel?`<button class="del" data-del="${esc(m.id)}">${chat.confirmDel===m.id?"Confirm delete":"Delete"}</button>`:""}</div></div>`;
+    ${reacts()}</div>`;
 }
 function renderChat(scroll){
   const log=$("chatLog");
