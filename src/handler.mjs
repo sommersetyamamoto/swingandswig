@@ -9,7 +9,11 @@
 // plus uploaded photos/videos under media/<id>/meta and media/<id>/<chunk#>.
 // Netlify Functions accept ~6 MB per request, so files arrive in 3 MB chunks
 // and are served back with HTTP Range support (iPhones need it for video).
+//   push    – { [uid]: { sub, prefs: "rulings" | "all", at } } phone notification subscriptions
+//   vapid   – the site's push signing keys, created on first use (or set
+//             VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY in Netlify to supply your own)
 import { createHash, timingSafeEqual, randomBytes } from "node:crypto";
+import * as webpush from "web-push";
 
 export const REACTS = ["up", "lol", "fire", "flag", "beer", "clap"];
 const DEFAULT_PARS = [4, 4, 3, 5, 4, 4, 3, 4, 5, 4, 4, 3, 5, 4, 4, 3, 4, 5];
@@ -140,6 +144,77 @@ async function putScore(store, b, chair) {
   return { scores };
 }
 
+/* ---------- phone notifications (Web Push) ---------- */
+// Only send to real browser push services, so nobody can make the server POST to arbitrary URLs.
+const PUSH_HOSTS = /(^|\.)(googleapis\.com|push\.apple\.com|mozilla\.com|mozaws\.net|notify\.windows\.com)$/;
+
+async function vapidKeys(store) {
+  const env = (k) => globalThis.Netlify?.env?.get(k) ?? process.env[k];
+  if (env("VAPID_PUBLIC_KEY") && env("VAPID_PRIVATE_KEY")) return { publicKey: env("VAPID_PUBLIC_KEY"), privateKey: env("VAPID_PRIVATE_KEY") };
+  const have = await read(store, "vapid", null);
+  if (have) return have;
+  const made = webpush.generateVAPIDKeys();
+  const res = await store.setJSON("vapid", made, { onlyIfNew: true });
+  return res.modified ? made : await read(store, "vapid", null);
+}
+
+function cleanSub(sub) {
+  let host = "";
+  try {
+    const u = new URL(sub?.endpoint);
+    if (u.protocol !== "https:") throw 0;
+    host = u.hostname;
+  } catch {
+    throw bad("That isn't a valid notification subscription.");
+  }
+  const p256dh = sub?.keys?.p256dh, auth = sub?.keys?.auth;
+  if (typeof p256dh !== "string" || typeof auth !== "string" || p256dh.length > 200 || auth.length > 100)
+    throw bad("That isn't a valid notification subscription.");
+  if (!PUSH_HOSTS.test(host) && !process.env.ALLOW_ANY_PUSH_ENDPOINT) throw bad("Unknown notification service.");
+  return { endpoint: sub.endpoint, keys: { p256dh, auth } };
+}
+
+// kind "ruling" goes to everyone subscribed; kind "chat" only to people who chose "all".
+async function notify(ctx, payload, { kind, skipUid = null, onlyUid = null }) {
+  const subs = await read(ctx.store, "push", {});
+  const targets = Object.entries(subs).filter(([u, s]) =>
+    onlyUid ? u === onlyUid : u !== skipUid && (kind !== "chat" || s.prefs === "all")
+  );
+  if (!targets.length) return;
+  const keys = await vapidKeys(ctx.store);
+  const opts = {
+    vapidDetails: {
+      subject: ctx.origin.startsWith("https://") ? ctx.origin : "mailto:notifications@example.com",
+      publicKey: keys.publicKey,
+      privateKey: keys.privateKey,
+    },
+    TTL: kind === "chat" ? 1800 : 6 * 3600,
+    urgency: kind === "chat" ? "normal" : "high",
+    timeout: 8000,
+  };
+  const gone = [];
+  await Promise.all(
+    targets.map(async ([u, s]) => {
+      try {
+        await webpush.sendNotification(s.sub, JSON.stringify(payload), opts);
+      } catch (e) {
+        if (e.statusCode === 404 || e.statusCode === 410) gone.push(u);
+        else console.error("push failed", e.statusCode || e.message);
+      }
+    })
+  );
+  if (gone.length)
+    await mutate(ctx.store, "push", {}, (all) => {
+      gone.forEach((u) => delete all[u]);
+      return all;
+    });
+}
+
+async function teamName(store, id) {
+  const config = await read(store, "config", null);
+  return config?.teams?.find((t) => t.id === id)?.name || "";
+}
+
 async function appendChat(store, msg) {
   let dropped = [];
   await mutate(store, "chat", [], (list) => {
@@ -151,11 +226,17 @@ async function appendChat(store, msg) {
 }
 
 // A ruling shows in chat once it's public; hiding or removing it takes it back out.
-const postRuling = (store, item) =>
-  appendChat(store, {
+async function postRuling(ctx, item) {
+  await appendChat(ctx.store, {
     id: newId(), uid: "", name: "Tournament chair", kind: "ruling", text: "", at: Date.now(), reactions: {},
     ruling: { adjustId: item.id, teamId: item.teamId, points: item.points, reason: item.reason },
   });
+  ctx.later(async () => {
+    const team = (await teamName(ctx.store, item.teamId)) || "A team";
+    const pts = `${item.points > 0 ? "+" : ""}${item.points}`;
+    await notify(ctx, { title: "⚖️ Chair's ruling", body: `${pts} ${team}: ${item.reason || "The chair's decision is final."}`, url: "/#chat", tag: "ruling-" + item.id }, { kind: "ruling" });
+  });
+}
 const unpostRuling = (store, adjustId) =>
   mutate(store, "chat", [], (list) => list.filter((m) => m.ruling?.adjustId !== adjustId));
 
@@ -261,12 +342,22 @@ async function media(store, req, method, uid, b, c) {
   throw new HttpError(404, "not_found", "No such endpoint.");
 }
 
-export async function handle(req, { store, chairPin }) {
+export async function handle(req, { store, chairPin, waitUntil }) {
   const url = new URL(req.url);
   const [a, b, c] = url.pathname.replace(/^\/api\/?/, "").split("/").filter(Boolean);
   const method = req.method;
   const chair = chairFrom(req, chairPin);
   const uid = uidFrom(req);
+  // Notifications go out after the response when the platform allows it (Netlify's waitUntil).
+  const ctx = {
+    store,
+    origin: url.origin,
+    async later(fn) {
+      const p = Promise.resolve().then(fn).catch((e) => console.error("background task failed", e));
+      if (waitUntil) waitUntil(p);
+      else await p;
+    },
+  };
 
   try {
     if (a === "media") return await media(store, req, method, uid, b, c);
@@ -315,7 +406,7 @@ export async function handle(req, { store, chairPin }) {
         const teamId = String(body.teamId || "");
         const item = { id: newId(), teamId, points, reason: str(body.reason, 120), hidden: !!body.hidden, at: Date.now() };
         await mutate(store, "adjust", [], (list) => [...list, item].slice(-500));
-        if (!item.hidden) await postRuling(store, item);
+        if (!item.hidden) await postRuling(ctx, item);
         return json({ item });
       }
       if (b && method === "PATCH") {
@@ -327,13 +418,45 @@ export async function handle(req, { store, chairPin }) {
             return (after = { ...x, hidden: !!body.hidden });
           })
         );
-        if (before && after && before.hidden && !after.hidden) await postRuling(store, after);
+        if (before && after && before.hidden && !after.hidden) await postRuling(ctx, after);
         if (before && after && !before.hidden && after.hidden) await unpostRuling(store, b);
         return json({ ok: true });
       }
       if (b && method === "DELETE") {
         await mutate(store, "adjust", [], (list) => list.filter((x) => x.id !== b));
         await unpostRuling(store, b);
+        return json({ ok: true });
+      }
+    }
+
+    // ---- phone notifications ----
+    if (a === "push") {
+      if (method === "GET" && b === "key") return json({ key: (await vapidKeys(store)).publicKey });
+      if (!uid) throw new HttpError(400, "no_key", "Missing client key.");
+      if (method === "GET" && b === "me") {
+        const mine = (await read(store, "push", {}))[uid];
+        return json({ prefs: mine ? mine.prefs : null });
+      }
+      if (method === "POST" && b === "subscribe") {
+        const sub = cleanSub(body.subscription);
+        const prefs = body.prefs === "all" ? "all" : "rulings";
+        await mutate(store, "push", {}, (all) => {
+          // One phone, one entry: drop any older entry for the same endpoint.
+          for (const [u, s] of Object.entries(all)) if (s.sub.endpoint === sub.endpoint) delete all[u];
+          all[uid] = { sub, prefs, at: Date.now() };
+          return Object.fromEntries(Object.entries(all).sort((x, y) => y[1].at - x[1].at).slice(0, 500));
+        });
+        return json({ prefs });
+      }
+      if (method === "POST" && b === "unsubscribe") {
+        await mutate(store, "push", {}, (all) => {
+          delete all[uid];
+          return all;
+        });
+        return json({ ok: true });
+      }
+      if (method === "POST" && b === "test") {
+        await notify(ctx, { title: "⛳ Swing & Swig", body: "Notifications are working. See you on the course!", url: "/#chat", tag: "test" }, { kind: "test", onlyUid: uid });
         return json({ ok: true });
       }
     }
@@ -355,6 +478,11 @@ export async function handle(req, { store, chairPin }) {
         const msg = { id: newId(), uid, name, teamId: str(body.teamId, 24), text, at: Date.now(), reactions: {} };
         if (attached) msg.media = attached;
         await appendChat(store, msg);
+        await ctx.later(async () => {
+          const team = await teamName(store, msg.teamId);
+          const body = msg.text || (msg.media?.kind === "video" ? "🎬 Sent a video" : "📷 Sent a photo");
+          await notify(ctx, { title: name + (team ? ` · ${team}` : ""), body, url: "/#chat", tag: "chat" }, { kind: "chat", skipUid: uid });
+        });
         return json({ msg });
       }
       if (b && c === "react" && method === "POST") {

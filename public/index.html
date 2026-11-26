@@ -7,6 +7,11 @@
 <title>Swing and Swig</title>
 <link rel="icon" type="image/png" href="img/icon-64.png">
 <link rel="apple-touch-icon" href="img/icon-180.png">
+<link rel="manifest" href="/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Swing &amp; Swig">
 <meta property="og:image" content="img/swing-and-swig-5th-annual.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -165,6 +170,12 @@ nav button .badge{display:inline-block;min-width:18px;padding:0 5px;margin-left:
 .reacts .add{color:var(--muted)}
 .reacts .del{color:var(--minus);border-color:transparent;background:none}
 .picker{display:flex;gap:4px;flex-wrap:wrap}
+.choice{display:flex;flex-direction:column;gap:6px}
+.choice label{display:flex;align-items:center;gap:8px;font-size:14px}
+.steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:14px}
+.steps svg{width:18px;height:18px;vertical-align:-3px}
+.bell-on{display:inline-flex;align-items:center;gap:6px;font-weight:600;color:var(--plus)}
+a.inline{color:var(--green);font-weight:600}
 .msg.ruling-msg{align-self:stretch;max-width:100%;align-items:center}
 .rcard{display:grid;grid-template-columns:56px 1fr;gap:10px;align-items:center;width:100%;max-width:420px;padding:10px 12px;border:1px solid var(--line);border-left:4px solid var(--green);border-radius:8px;background:var(--bg)}
 .rcard .pts{font:800 22px var(--display);text-align:center;border-radius:4px;padding:2px 0}
@@ -231,6 +242,7 @@ footer a{color:inherit}
     <div class="legend"><span>Bogey 1 · Par 2 · Birdie 3 · Eagle 4 · Albatross 5 · Double bogey or worse 0</span><span>Tap a team for its card.</span></div>
     <div class="panel">
       <h2>Chair's rulings</h2>
+      <p class="note" id="pushPlug" hidden><a href="#chat" class="inline" id="pushPlugLink">Get a notification</a> on your phone when the chair makes a ruling.</p>
       <div class="feed" id="feed"><p class="note">No rulings yet. The tournament chair may add or deduct points at any time, for any reason.</p></div>
     </div>
   </section>
@@ -278,6 +290,12 @@ footer a{color:inherit}
         <button class="btn primary" id="chatSend" type="submit">Send</button>
       </form>
       <div class="status" id="chatStatus"></div>
+    </div>
+
+    <div class="panel" id="pushPanel" hidden>
+      <h2>🔔 Notifications</h2>
+      <div id="pushBody"></div>
+      <div class="status" id="pushStatus"></div>
     </div>
   </section>
 
@@ -849,11 +867,87 @@ function schedule(){clearInterval(timer);timer=setInterval(()=>{if(!document.hid
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)refresh()});
 window.addEventListener("online",refresh);
 
+/* ---------- phone notifications ---------- */
+const push={key:null,on:false,prefs:ls.get("ss-push-prefs")||"all",busy:false};
+const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+const standalone=()=>matchMedia("(display-mode: standalone)").matches||navigator.standalone===true;
+const pushSupported=()=>"serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
+const SHARE_ICON=`<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-label="Share"><path d="M12 3v12"/><path d="M8 7l4-4 4 4"/><path d="M5 11v9h14v-9"/></svg>`;
+function b64u(s){const p="=".repeat((4-s.length%4)%4),r=atob((s+p).replace(/-/g,"+").replace(/_/g,"/"));return Uint8Array.from(r,c=>c.charCodeAt(0))}
+function prefsHtml(){return `<div class="choice" role="radiogroup" aria-label="What to get notified about">
+  <label><input type="radio" name="pushPrefs" value="rulings"${push.prefs==="rulings"?" checked":""}> Chair's rulings only</label>
+  <label><input type="radio" name="pushPrefs" value="all"${push.prefs==="all"?" checked":""}> Rulings and chat messages</label></div>`}
+function renderPush(){
+  const panel=$("pushPanel"),body=$("pushBody");
+  if(!push.key){panel.hidden=true;$("pushPlug").hidden=true;return}
+  panel.hidden=false;$("pushPlug").hidden=push.on;
+  let h="";
+  if(isIOS&&!standalone()){
+    h=`<p class="note">On iPhone, notifications work once Swing &amp; Swig is on your Home Screen:</p>
+      <ol class="steps"><li>Tap the Share button ${SHARE_ICON} at the bottom of Safari.</li><li>Scroll down and tap <b>Add to Home Screen</b>, then <b>Add</b>.</li><li>Open <b>Swing &amp; Swig</b> from your Home Screen, go to Chat, and turn notifications on here.</li></ol>
+      <p class="note">Using Chrome on iPhone? Open this page in Safari first. You'll enter your name again in the Home Screen version.</p>`;
+  }else if(!pushSupported()){
+    h=`<p class="note">This browser can't show notifications. Try Safari on iPhone or Chrome on Android.</p>`;
+  }else if(Notification.permission==="denied"){
+    h=`<p class="note">Notifications are blocked for this site. Turn them on in your phone's Settings for ${isIOS?"Swing &amp; Swig":"this site"}, then come back.</p>`;
+  }else if(push.on){
+    h=`<div class="bell-on">✓ Notifications are on</div>${prefsHtml()}<div class="row"><button class="btn" id="pushTest">Send me a test</button><button class="btn danger" id="pushOff">Turn off</button></div>`;
+  }else{
+    h=`<p class="note">Get a notification on this phone when something happens, even when Swing &amp; Swig is closed.</p>${prefsHtml()}<div class="row"><button class="btn primary" id="pushOn">Turn on notifications</button></div>`;
+  }
+  body.innerHTML=h;
+  body.querySelectorAll('input[name="pushPrefs"]').forEach(r=>r.onchange=async()=>{push.prefs=r.value;ls.set("ss-push-prefs",push.prefs);if(push.on)await syncSub(true)});
+  if($("pushOn"))$("pushOn").onclick=turnOn;
+  if($("pushOff"))$("pushOff").onclick=turnOff;
+  if($("pushTest"))$("pushTest").onclick=async()=>{$("pushStatus").textContent="Sending…";try{await API.call("POST","push/test",{});$("pushStatus").textContent="Sent. It should arrive in a few seconds."}catch(_){$("pushStatus").textContent="Couldn't send the test."}};
+}
+async function subscription(create){
+  const reg=await navigator.serviceWorker.ready;
+  let sub=await reg.pushManager.getSubscription();
+  if(sub||!create)return sub;
+  const opts={userVisibleOnly:true,applicationServerKey:b64u(push.key)};
+  try{return await reg.pushManager.subscribe(opts)}
+  catch(e){const old=await reg.pushManager.getSubscription();if(old){await old.unsubscribe();return reg.pushManager.subscribe(opts)}throw e}
+}
+async function syncSub(announce){
+  const sub=await subscription(false);if(!sub){push.on=false;return renderPush()}
+  try{await API.call("POST","push/subscribe",{subscription:sub.toJSON(),prefs:push.prefs});push.on=true;if(announce)$("pushStatus").textContent=push.prefs==="all"?"You'll get rulings and chat messages.":"You'll get the chair's rulings."}
+  catch(e){$("pushStatus").textContent=e.message||"Couldn't save that."}
+  renderPush();
+}
+async function turnOn(){
+  if(push.busy)return;push.busy=true;$("pushStatus").textContent="";
+  try{
+    const perm=await Notification.requestPermission();   // must be the first thing after the tap on iPhone
+    if(perm!=="granted"){$("pushStatus").textContent=perm==="denied"?"":"Notifications weren't turned on.";return renderPush()}
+    await subscription(true);await syncSub(true);
+  }catch(e){$("pushStatus").textContent="Couldn't turn on notifications on this phone. "+(e.message||"")}
+  finally{push.busy=false;renderPush()}
+}
+async function turnOff(){
+  try{const sub=await subscription(false);if(sub)await sub.unsubscribe();await API.call("POST","push/unsubscribe",{});push.on=false;$("pushStatus").textContent="Notifications are off."}
+  catch(_){$("pushStatus").textContent="Couldn't turn them off. Try again."}
+  renderPush();
+}
+async function initPush(){
+  try{push.key=(await API.call("GET","push/key")).key}catch(_){return}
+  if(pushSupported()){
+    try{
+      await navigator.serviceWorker.register("/sw.js");
+      navigator.serviceWorker.addEventListener("message",e=>{if(e.data&&e.data.type==="open"){const h=new URL(e.data.url).hash.slice(1);if(h)show(h);refresh()}});
+      // Keep the server's copy in step with this phone (e.g. after the browser renews the subscription).
+      if(Notification.permission==="granted"&&await subscription(false))await syncSub(false);
+    }catch(_){}
+  }
+  renderPush();
+}
+$("pushPlugLink").onclick=e=>{e.preventDefault();show("chat");setTimeout(()=>$("pushPanel").scrollIntoView({behavior:"smooth",block:"center"}),50)};
+
 /* ---------- boot ---------- */
 renderAll();loadDraft();renderName();renderChairGate();
 $("tab-chair").hidden=!API.pin;
 const h=(location.hash||"").slice(1);if(["board","card","chat","chair"].includes(h))show(h);
-refresh();schedule();
+refresh();schedule();initPush();
 })();
 </script>
 </body>

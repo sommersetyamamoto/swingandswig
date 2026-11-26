@@ -4,7 +4,8 @@ A live leaderboard for a Stableford scramble. Players enter scores from their ph
 
 - **Leaderboard**: live standings, tap a team to see its card, and the chair's rulings feed
 - **Scorecard**: one-tap stroke entry per hole, with points worked out for you
-- **Chat**: clubhouse trash talk with emoji reactions, photos and videos
+- **Chat**: clubhouse trash talk with emoji reactions, photos, videos, and the chair's rulings
+- **Notifications**: optional phone alerts for rulings and chat, plus Add to Home Screen as an app
 - **Chair** (password-protected): rulings, including hidden ones you reveal later, the "Roll a wildcard" button, scorecard lock, and event setup (name, course, date, 9 or 18 holes, pars, teams)
 
 Stableford points: double bogey or worse 0 · bogey 1 · par 2 · birdie 3 · eagle 4 · albatross 5.
@@ -39,6 +40,15 @@ Then open http://localhost:8888 and use chair password `1234`. Local data is kep
 - Videos can be up to **50 MB** (roughly 30 seconds of iPhone 1080p video). They upload in 3 MB pieces because Netlify Functions accept about 6 MB per request, and they play back with seeking.
 - Files live in the same Netlify Blobs store as everything else. Deleting a message deletes its photo or video too. The chat keeps the newest 300 messages and removes older files with them.
 - Every view of a video streams through the site's function, so lots of video counts against your Netlify bandwidth and function usage.
+
+## Phone notifications
+
+Players turn these on at the bottom of the **Chat** tab and choose **Chair's rulings only** or **Rulings and chat messages**. Rulings arrive as soon as they're posted or revealed. Hidden rulings send nothing until the chair reveals them.
+
+- **iPhone:** add the site to the Home Screen first (Safari → Share → Add to Home Screen), open it from there, then turn notifications on. Apple only allows web notifications for Home Screen web apps (iOS 16.4 or later).
+- **Android:** turn them on straight from Chrome.
+- No setup is needed in Netlify. The site creates its push signing keys the first time someone asks for them and keeps them in Netlify Blobs. To use your own keys instead, set `VAPID_PUBLIC_KEY` and `VAPID_PRIVATE_KEY`.
+- Phones that uninstall or turn notifications off are removed automatically the next time a notification bounces.
 
 ## Notes
 
