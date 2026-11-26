@@ -688,10 +688,17 @@ function renderFeed(){
 /* ---------- scorecard ---------- */
 function renderTeamSel(){
   const teams=cfg().teams||[];
-  if(!teams.find(t=>t.id===st.team))st.team=teams[0]?.id||null;
-  const opts=teams.length?teams.map(t=>`<option value="${esc(t.id)}"${t.id===st.team?" selected":""}>${esc(t.name)}</option>`).join(""):`<option value="">No teams set up yet</option>`;
-  const keep=$("adjTeam").value;
-  $("teamSel").innerHTML=opts;$("adjTeam").innerHTML=opts;
+  // Wait for the real team list before deciding anything, so the saved team isn't lost while the page loads.
+  if(st.ready){
+    if(st.team&&!teams.find(t=>t.id===st.team)){st.team=null;ls.set("ss-team",null)} // that team was removed
+    if(!st.team){const p=findPlayer(chat.name);if(p){st.team=p.team.id;ls.set("ss-team",st.team)}} // known player: use their team
+  }
+  const list=teams.map(t=>`<option value="${esc(t.id)}"${t.id===st.team?" selected":""}>${esc(t.name)}</option>`).join("");
+  const opts=!teams.length?`<option value="">${st.ready?"No teams set up yet":"Loading teams…"}</option>`
+    :(st.team?"":`<option value="" selected disabled>Choose your team…</option>`)+list;
+  if($("teamSel").innerHTML!==opts)$("teamSel").innerHTML=opts;
+  const keep=$("adjTeam").value,adj=teams.length?list.replace(/ selected/g,""):`<option value="">No teams set up yet</option>`;
+  if($("adjTeam").innerHTML!==adj)$("adjTeam").innerHTML=adj;
   if(keep&&teams.find(t=>t.id===keep))$("adjTeam").value=keep;
 }
 $("teamSel").onchange=e=>{st.team=e.target.value;ls.set("ss-team",st.team);st.hole=firstOpen();renderCard()};
@@ -719,7 +726,7 @@ function renderCard(){
     r1+=`<td class="sub">${lab}</td>`;r2+=`<td class="sub">${sp}</td>`;r3+=`<td class="sub"></td>`;r4+=`<td class="sub">${sP}</td>`;
     html+=`<table style="margin-bottom:8px">${r1}</tr>${r2}</tr>${r3}</tr>${r4}</tr></table>`;
   });
-  $("cardTable").innerHTML=st.team?html:`<p class="note">Pick your team above to start scoring.</p>`;
+  $("cardTable").innerHTML=st.team?html:`<p class="note">Choose your team above to start scoring.</p>`;
   $("cardTable").querySelectorAll("td[data-i]").forEach(td=>td.onclick=()=>{st.hole=+td.dataset.i;renderCard();window.scrollTo({top:0,behavior:"smooth"})});
   $("sumline").innerHTML=st.team?`<span><b class="num">${c.base}</b>points</span><span><b class="num">${c.adj>0?"+"+c.adj:c.adj}</b>rulings</span><span><b class="num">${c.total}</b>total</span><span><b class="num">${c.thru}</b>of ${p.length} holes</span>`:"";
 }
